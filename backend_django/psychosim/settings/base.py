@@ -39,6 +39,15 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "psychosim.urls"
 WSGI_APPLICATION = "psychosim.wsgi.application"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {"context_processors": []},
+    }
+]
 AUTH_USER_MODEL = "users.CustomUser"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
