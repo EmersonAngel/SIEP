@@ -1,0 +1,25 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtualenvs
+backend_django/.venv/
+.venv/
+venv/
+
+# Env / secrets
+.env
+*.local
+
+# Logs / DB
+*.log
+*.sqlite3
+
+# OS / IDE
+.DS_Store
+desktop.ini
+.idea/
+.vscode/
