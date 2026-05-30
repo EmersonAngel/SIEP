@@ -37,6 +37,11 @@ class SimulationAttempt(models.Model):
     )
     accumulated_score = models.IntegerField(default=0)
     stress_index = models.IntegerField(default=0)
+    # Clinical metrics (Flyway V8).
+    victim_risk = models.IntegerField(default=50)
+    user_trust = models.IntegerField(default=50)
+    institutional_route_activated = models.BooleanField(default=False)
+    revictimization_risk = models.BooleanField(default=False)
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     locked_at = models.DateTimeField(null=True, blank=True)

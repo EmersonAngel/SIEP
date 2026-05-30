@@ -82,6 +82,14 @@ SIMPLE_JWT = {
     "USER_ID_CLAIM": "userId",
 }
 
+# Reflection-at-rest encryption key (defaults to the JWT secret, like Spring's
+# simulation.reflection.encryption-key:${jwt.secret}).
+JWT_SECRET = os.environ.get(
+    "JWT_SECRET",
+    "psychosim-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256",
+)
+REFLECTION_ENCRYPTION_KEY = os.environ.get("REFLECTION_ENCRYPTION_KEY", JWT_SECRET)
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "PsychoSim / SIEP API",
     "DESCRIPTION": "Backend Django para el simulador SIEP (contrato idéntico a Spring).",
