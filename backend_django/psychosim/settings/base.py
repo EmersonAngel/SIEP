@@ -92,4 +92,6 @@ SPECTACULAR_SETTINGS = {
 LANGUAGE_CODE = "es"
 TIME_ZONE = "America/Bogota"
 USE_I18N = True
-USE_TZ = True
+# Spring uses LocalDateTime and the columns are "timestamp without time zone";
+# keep datetimes naive so the JSON contract matches Spring exactly.
+USE_TZ = False
