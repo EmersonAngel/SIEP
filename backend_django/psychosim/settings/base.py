@@ -14,6 +14,11 @@ SECRET_KEY = os.environ.get(
 )
 
 INSTALLED_APPS = [
+    # auth + contenttypes are required by djangorestframework-simplejwt (it
+    # imports django.contrib.auth.models at load time). Our user model is custom
+    # (managed=False, no PermissionsMixin); these apps only add Django's small
+    # housekeeping tables (content_type/permission) — additive and ignored by
+    # Spring. The running server never auto-creates tables (only migrate does).
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "rest_framework",
@@ -65,6 +70,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "shared.exceptions.custom_exception_handler",
 }
 
 SIMPLE_JWT = {
