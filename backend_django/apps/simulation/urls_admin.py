@@ -1,0 +1,48 @@
+from django.urls import path
+
+from .views.authoring_views import (
+    ChecklistView,
+    CloneVersionView,
+    DecisionDetailView,
+    DecisionListView,
+    DialogueDetailView,
+    DialogueListView,
+    EditorView,
+    MapDetailView,
+    MapListView,
+    NodeDetailView,
+    NodeListView,
+    ObjectDetailView,
+    ObjectListView,
+    PublishView,
+    ToolDetailView,
+    ToolListView,
+    WorldEditorView,
+    WorldPreviewView,
+    WorldSaveView,
+    WorldValidateView,
+)
+
+# Mounted at "api/admin/cases" (no trailing slash) — sub-routes start with "/".
+urlpatterns = [
+    path("/<int:case_version_id>/editor", EditorView.as_view()),
+    path("/<int:case_version_id>/publish", PublishView.as_view()),
+    path("/<int:case_version_id>/clone-version", CloneVersionView.as_view()),
+    path("/<int:case_version_id>/nodes", NodeListView.as_view()),
+    path("/<int:case_version_id>/nodes/<int:node_id>", NodeDetailView.as_view()),
+    path("/<int:case_version_id>/decisions", DecisionListView.as_view()),
+    path("/<int:case_version_id>/decisions/<int:decision_id>", DecisionDetailView.as_view()),
+    path("/<int:case_version_id>/maps", MapListView.as_view()),
+    path("/<int:case_version_id>/maps/<int:map_id>", MapDetailView.as_view()),
+    path("/<int:case_version_id>/maps/<int:map_id>/objects", ObjectListView.as_view()),
+    path("/<int:case_version_id>/objects/<int:object_id>", ObjectDetailView.as_view()),
+    path("/<int:case_version_id>/maps/<int:map_id>/dialogues", DialogueListView.as_view()),
+    path("/<int:case_version_id>/dialogues/<int:tree_id>", DialogueDetailView.as_view()),
+    path("/<int:case_version_id>/tools", ToolListView.as_view()),
+    path("/<int:case_version_id>/tools/<int:tool_id>", ToolDetailView.as_view()),
+    path("/<int:case_version_id>/checklist", ChecklistView.as_view()),
+    path("/<int:case_version_id>/world-editor", WorldEditorView.as_view()),
+    path("/<int:case_version_id>/world/validate", WorldValidateView.as_view()),
+    path("/<int:case_version_id>/world", WorldSaveView.as_view()),
+    path("/<int:case_version_id>/world-preview", WorldPreviewView.as_view()),
+]

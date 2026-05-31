@@ -14,6 +14,7 @@ from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.http import Http404
 from rest_framework import status
 from rest_framework.exceptions import (
+    APIException,
     AuthenticationFailed,
     NotAuthenticated,
     PermissionDenied,
@@ -21,6 +22,14 @@ from rest_framework.exceptions import (
 )
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
+
+
+class Conflict(APIException):
+    """HTTP 409 — optimistic-lock / state conflict (Spring ResponseStatusException)."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Conflicto"
+    default_code = "conflict"
 
 
 def _flatten(detail, prefix=""):
