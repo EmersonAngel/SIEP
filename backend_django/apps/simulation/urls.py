@@ -4,6 +4,7 @@ from apps.simulation.views.game_views import (
     ActiveAttemptView,
     AttemptView,
     CasesView,
+    CatalogView,
     CompletionReportView,
     DecisionsView,
     InteractionView,
@@ -18,6 +19,7 @@ from apps.simulation.views.game_views import (
 
 # Mounted at "api/simulation".
 urlpatterns = [
+    path("/catalog", CatalogView.as_view()),
     path("/cases", CasesView.as_view()),
     path("/cases/<int:case_version_id>/active-attempt", ActiveAttemptView.as_view()),
     path("/attempts", StartAttemptView.as_view()),

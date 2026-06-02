@@ -161,3 +161,11 @@ class ToolUseView(APIView):
             request.user,
         )
         return api_ok(result, message="Herramienta usada")
+
+
+class CatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.progression.catalog import build_catalog
+        return api_ok(build_catalog(request.user))
