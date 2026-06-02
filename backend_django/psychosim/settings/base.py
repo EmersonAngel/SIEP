@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "apps.grupos",
     "apps.sesiones",
     "apps.simulation",
+    "apps.progression",
 ]
 
 MIDDLEWARE = [
