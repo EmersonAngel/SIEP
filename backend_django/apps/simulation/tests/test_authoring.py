@@ -214,3 +214,69 @@ def test_checklist_full_then_publish(admin, published_cv):
         assert pub.data["message"].startswith(
             "El caso no puede publicarse con errores de validación"
         )
+
+
+# --- Fase 1: dialogue authoring (save_world persists trees/lines/choices) ---
+def test_world_save_persists_dialogue_with_choices(admin, published_cv):
+    a = cl(admin)
+    clone_id = a.post(f"{BASE}/{published_cv}/clone-version").data["data"]["caseVersionId"]
+    we = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    rev, node_id = we["revision"], we["nodeId"]
+    obj_key = we["objects"][0]["key"]
+    decision_id = a.get(f"{BASE}/{clone_id}/editor").data["data"]["decisions"][0]["id"]
+
+    body = {
+        "revision": rev,
+        "map": we["map"],
+        "objects": we["objects"],
+        "collisionZones": we["collisionZones"],
+        "clinicalTools": we["clinicalTools"],
+        "dialogues": [{
+            "id": None, "key": "dlg-test", "speakerName": "Consultante",
+            "portraitKey": None, "emotion": "ansiedad",
+            "mapObjectId": None, "mapObjectKey": obj_key,
+            "lines": [{"order": 0, "speakerName": "Consultante",
+                       "text": "Tengo miedo.", "emotion": "ansiedad"}],
+            "choices": [{"key": "c1", "text": "Estás a salvo aquí.",
+                         "decisionOptionId": decision_id, "requiredToolCode": None,
+                         "effect": {}, "displayOrder": 0}],
+        }],
+    }
+    resp = a.put(f"{BASE}/{clone_id}/world?nodeId={node_id}", body, format="json")
+    assert resp.status_code == 200
+
+    reloaded = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    tree = next(t for t in reloaded["dialogues"] if t["key"] == "dlg-test")
+    assert len(tree["lines"]) == 1 and tree["lines"][0]["text"] == "Tengo miedo."
+    assert len(tree["choices"]) == 1
+    assert tree["choices"][0]["decisionOptionId"] == decision_id
+
+
+def test_world_save_removes_absent_dialogues(admin, published_cv):
+    a = cl(admin)
+    clone_id = a.post(f"{BASE}/{published_cv}/clone-version").data["data"]["caseVersionId"]
+    we = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    obj_key = we["objects"][0]["key"]
+    base = {"map": we["map"], "objects": we["objects"],
+            "collisionZones": we["collisionZones"], "clinicalTools": we["clinicalTools"]}
+
+    a.put(f"{BASE}/{clone_id}/world?nodeId={we['nodeId']}",
+          {**base, "revision": we["revision"], "dialogues": [{
+              "id": None, "key": "tmp", "speakerName": "X", "portraitKey": None,
+              "emotion": "neutral", "mapObjectId": None, "mapObjectKey": obj_key,
+              "lines": [], "choices": []}]}, format="json")
+    we2 = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    assert any(t["key"] == "tmp" for t in we2["dialogues"])
+
+    a.put(f"{BASE}/{clone_id}/world?nodeId={we2['nodeId']}",
+          {**base, "revision": we2["revision"], "dialogues": []}, format="json")
+    we3 = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    assert all(t["key"] != "tmp" for t in we3["dialogues"])
+
+
+def test_world_editor_exposes_available_decisions(admin, published_cv):
+    we = cl(admin).get(f"{BASE}/{published_cv}/world-editor").data["data"]
+    assert "availableDecisions" in we
+    for d in we["availableDecisions"]:
+        for k in ("id", "optionKey", "text", "classification", "targetNodeKey", "prohibitedConduct"):
+            assert k in d, f"availableDecisions missing {k}"

@@ -464,6 +464,26 @@ def _save_dialogue_lines(tree, lines):
         )
 
 
+def _save_dialogue_choices(tree, choices, case_version_id):
+    if not choices:
+        return
+    for ch in choices:
+        decision = None
+        if ch.get("decisionOptionId") is not None:
+            decision = DecisionOption.objects.filter(
+                pk=ch.get("decisionOptionId"), case_version_id=case_version_id
+            ).first()
+        DialogueChoice.objects.create(
+            dialogue_tree=tree,
+            choice_key=ch.get("key") or "",
+            text=ch.get("text") or "",
+            decision_option=decision,
+            required_tool_code=ch.get("requiredToolCode"),
+            effect_json=_write_map(ch.get("effect")),
+            display_order=_int(ch.get("displayOrder")),
+        )
+
+
 # ─── Tool CRUD ────────────────────────────────────────────────────────────────
 @transaction.atomic
 def create_tool(case_version_id, request):
@@ -926,6 +946,11 @@ def world_editor(case_version_id, node_id):
     exit_key = exit_objects[0].object_key if exit_objects else None
 
     validation = _run_world_validation(version)
+    outgoing = list(
+        DecisionOption.objects.filter(source_node_id=scene_map.node_id)
+        .select_related("target_node")
+        .order_by("id")
+    )
 
     return {
         "schemaVersion": 2,
@@ -943,6 +968,17 @@ def world_editor(case_version_id, node_id):
             "supportResources": [],
         },
         "validation": validation,
+        "availableDecisions": [
+            {
+                "id": d.id,
+                "optionKey": d.option_key,
+                "text": d.text,
+                "classification": d.classification,
+                "targetNodeKey": d.target_node.node_key,
+                "prohibitedConduct": d.prohibited_conduct,
+            }
+            for d in outgoing
+        ],
     }
 
 
@@ -1023,6 +1059,42 @@ def save_world(case_version_id, node_id, request):
             else:
                 obj.decision_option = None
             obj.save()
+
+    dialogues = request.get("dialogues")
+    if dialogues is not None:
+        obj_by_key = {o.object_key: o for o in MapObject.objects.filter(scene_map=scene_map)}
+        kept_tree_ids = []
+        for dt in dialogues:
+            tree = None
+            if dt.get("id") is not None:
+                tree = DialogueTree.objects.filter(pk=dt.get("id"), scene_map=scene_map).first()
+            if tree is None:
+                tree = DialogueTree(scene_map=scene_map)
+            owner = None
+            if dt.get("mapObjectKey") is not None:
+                owner = obj_by_key.get(dt.get("mapObjectKey"))
+            if owner is None and dt.get("mapObjectId") is not None:
+                owner = MapObject.objects.filter(pk=dt.get("mapObjectId"), scene_map=scene_map).first()
+            tree.scene_map = scene_map
+            tree.map_object = owner
+            tree.tree_key = dt.get("key") or ""
+            tree.speaker_name = dt.get("speakerName") or ""
+            tree.portrait_key = dt.get("portraitKey")
+            tree.emotion = dt.get("emotion") if dt.get("emotion") is not None else "neutral"
+            tree.save()
+            kept_tree_ids.append(tree.id)
+            DialogueLine.objects.filter(dialogue_tree=tree).delete()
+            for ln in (dt.get("lines") or []):
+                DialogueLine.objects.create(
+                    dialogue_tree=tree,
+                    display_order=_int(ln.get("order")),
+                    speaker_name=ln.get("speakerName") or tree.speaker_name,
+                    text=ln.get("text") or "",
+                    emotion=ln.get("emotion") if ln.get("emotion") is not None else "neutral",
+                )
+            DialogueChoice.objects.filter(dialogue_tree=tree).delete()
+            _save_dialogue_choices(tree, dt.get("choices"), case_version_id)
+        DialogueTree.objects.filter(scene_map=scene_map).exclude(pk__in=kept_tree_ids).delete()
 
     # Spring calls caseVersionRepository.save(version); @Version only bumps when the
     # entity is dirty (it isn't here), so the revision is intentionally left unchanged.
