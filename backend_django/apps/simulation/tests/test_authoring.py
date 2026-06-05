@@ -280,3 +280,27 @@ def test_world_editor_exposes_available_decisions(admin, published_cv):
     for d in we["availableDecisions"]:
         for k in ("id", "optionKey", "text", "classification", "targetNodeKey", "prohibitedConduct"):
             assert k in d, f"availableDecisions missing {k}"
+
+
+# --- Fase 3: multi-room (rooms list + ambient persistence) ------------------
+def test_world_editor_exposes_rooms(admin, published_cv):
+    we = cl(admin).get(f"{BASE}/{published_cv}/world-editor").data["data"]
+    assert "rooms" in we and len(we["rooms"]) >= 1
+    for k in ("nodeId", "nodeKey", "mapKey", "title"):
+        assert k in we["rooms"][0], f"rooms missing {k}"
+
+
+def test_world_save_persists_ambient(admin, published_cv):
+    a = cl(admin)
+    clone_id = a.post(f"{BASE}/{published_cv}/clone-version").data["data"]["caseVersionId"]
+    we = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]
+    body = {
+        "revision": we["revision"], "objects": we["objects"],
+        "collisionZones": we["collisionZones"], "clinicalTools": we["clinicalTools"],
+        "map": {**we["map"], "ambient": {"cameraZoom": 1.5, "backgroundImage": "bg/sala.png"}},
+    }
+    ok = a.put(f"{BASE}/{clone_id}/world?nodeId={we['nodeId']}", body, format="json")
+    assert ok.status_code == 200
+    re_amb = a.get(f"{BASE}/{clone_id}/world-editor").data["data"]["map"]["ambient"]
+    assert re_amb.get("cameraZoom") == 1.5
+    assert re_amb.get("backgroundImage") == "bg/sala.png"

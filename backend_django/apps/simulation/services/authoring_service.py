@@ -979,6 +979,11 @@ def world_editor(case_version_id, node_id):
             }
             for d in outgoing
         ],
+        "rooms": [
+            {"nodeId": mm.node_id, "nodeKey": mm.node.node_key, "mapKey": mm.map_key, "title": mm.title}
+            for mm in SceneMap.objects.filter(case_version_id=case_version_id)
+            .select_related("node").order_by("id")
+        ],
     }
 
 
@@ -1021,6 +1026,8 @@ def save_world(case_version_id, node_id, request):
             scene_map.spawn_y = _int(map_def.get("spawnY"))
         if map_def.get("theme") is not None:
             scene_map.theme = map_def.get("theme")
+        if map_def.get("ambient") is not None:
+            scene_map.ambient_json = _write_map(map_def.get("ambient"))
         scene_map.save()
 
     objects = request.get("objects")
