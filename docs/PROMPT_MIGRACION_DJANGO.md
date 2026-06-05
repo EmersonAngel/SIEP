@@ -1,3 +1,5 @@
+> ⚠️ **DOCUMENTO HISTÓRICO.** La migración a Django descrita aquí **ya se completó** (`backend_django` existe y replica el contrato Spring). Se conserva como registro del encargo de migración; la fuente de verdad vigente es **`PROMPT_MAESTRO.md`**.
+
 # PROMPT MAESTRO — Construcción del backend SIEP en Django (proyecto nuevo, respaldo intacto)
 
 > **Cómo usar este documento:** este es un **prompt autónomo** para entregar a un agente en frío (sin memoria de la conversación previa). Contiene todo el contexto, requisitos, reglas, contrato de API, stack y plan de ejecución necesarios para construir, **desde cero y en un proyecto nuevo**, el backend de SIEP usando **Django + Django REST Framework**, replicando 1:1 lo que hoy existe en Spring Boot.

@@ -1,3 +1,5 @@
+> ⚠️ **DOCUMENTO HISTÓRICO (era Java/Spring).** Este plan rector fue escrito para el backend **Spring Boot/Java**, hoy **congelado como respaldo**. El backend activo es **Django** y la fuente de verdad vigente es **`PROMPT_MAESTRO.md`**. Se conserva por su valor de diseño (mecánicas del simulador, decisiones de arquitectura), pero **no** refleja el stack actual; no ejecutes sus comandos `mvn`/Spring contra el sistema vigente.
+
 # PSYCHOSIM — PLAN MAESTRO DE EJECUCIÓN V3
 
 ### "Clinical-grade, Undertale-tier" · Documento-biblia autocontenido
