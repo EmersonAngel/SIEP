@@ -22,43 +22,15 @@ from ..models import (
     SceneMap,
 )
 from . import game_service
+from shared.jsonutils import (
+    coerce_int as _int,
+    read_map as _read_map,
+    read_string_list as _read_string_list,
+    write_map as _write_map,
+)
 
 
 # ─── json helpers ─────────────────────────────────────────────────────────────
-def _read_string_list(raw):
-    if not raw:
-        return []
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, list) else []
-    except (ValueError, TypeError):
-        return []
-
-
-def _read_map(raw):
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, dict) else {}
-    except (ValueError, TypeError):
-        return {}
-
-
-def _write_map(value):
-    try:
-        return json.dumps(value if value is not None else {})
-    except (TypeError, ValueError):
-        return "{}"
-
-
-def _int(value, default=0):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
 def _append_unique(raw_json, value):
     items = _read_string_list(raw_json)
     if value not in items:

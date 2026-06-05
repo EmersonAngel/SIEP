@@ -37,55 +37,23 @@ from ..models import (
 )
 from . import world_validation
 from .audit_service import auditable
+from shared.jsonutils import (
+    coerce_int as _int,
+    read_map as _read_map,
+    read_string_list as _read_string_list,
+    write_map as _write_map,
+)
 
 VALID_CLASSIFICATIONS = {"ADEQUATE", "RISKY", "INADEQUATE"}
 
 
-# ─── tiny coercion helpers ───────────────────────────────────────────────────
-def _int(value, default=0):
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
+# ─── tiny helpers (read_map/write_map/read_string_list/coerce_int → shared/jsonutils) ──
 def _flag(request, key):
     return bool(request.get(key))
 
 
-def _read_string_list(raw):
-    if not raw:
-        return []
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, list) else []
-    except (ValueError, TypeError):
-        return []
-
-
 def _write_string_list(value):
     return json.dumps(value) if value is not None else "[]"
-
-
-def _read_map(raw):
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, dict) else {}
-    except (ValueError, TypeError):
-        return {}
-
-
-def _write_map(value):
-    if value is None:
-        return "{}"
-    try:
-        return json.dumps(value)
-    except (TypeError, ValueError):
-        return "{}"
 
 
 # ─── guards ──────────────────────────────────────────────────────────────────
