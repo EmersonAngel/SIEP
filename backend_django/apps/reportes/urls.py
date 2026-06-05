@@ -1,8 +1,8 @@
 from django.urls import path
 
-from .views_reportes import DashboardView, ReporteGrupoExportView, ReporteGrupoView
+from .views import DashboardView, ReporteGrupoExportView, ReporteGrupoView
 
-# Mounted at "api/reportes" (no trailing slash) — sub-routes start with "/".
+# Montado en "api/reportes" (sin slash final) — sub-rutas empiezan con "/".
 urlpatterns = [
     path("/dashboard", DashboardView.as_view()),
     path("/grupo/<int:grupo_id>", ReporteGrupoView.as_view()),

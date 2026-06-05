@@ -37,55 +37,23 @@ from ..models import (
 )
 from . import world_validation
 from .audit_service import auditable
+from shared.jsonutils import (
+    coerce_int as _int,
+    read_map as _read_map,
+    read_string_list as _read_string_list,
+    write_map as _write_map,
+)
 
 VALID_CLASSIFICATIONS = {"ADEQUATE", "RISKY", "INADEQUATE"}
 
 
-# ─── tiny coercion helpers ───────────────────────────────────────────────────
-def _int(value, default=0):
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
+# ─── tiny helpers (read_map/write_map/read_string_list/coerce_int → shared/jsonutils) ──
 def _flag(request, key):
     return bool(request.get(key))
 
 
-def _read_string_list(raw):
-    if not raw:
-        return []
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, list) else []
-    except (ValueError, TypeError):
-        return []
-
-
 def _write_string_list(value):
     return json.dumps(value) if value is not None else "[]"
-
-
-def _read_map(raw):
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, dict) else {}
-    except (ValueError, TypeError):
-        return {}
-
-
-def _write_map(value):
-    if value is None:
-        return "{}"
-    try:
-        return json.dumps(value)
-    except (TypeError, ValueError):
-        return "{}"
 
 
 # ─── guards ──────────────────────────────────────────────────────────────────
@@ -979,6 +947,11 @@ def world_editor(case_version_id, node_id):
             }
             for d in outgoing
         ],
+        "rooms": [
+            {"nodeId": mm.node_id, "nodeKey": mm.node.node_key, "mapKey": mm.map_key, "title": mm.title}
+            for mm in SceneMap.objects.filter(case_version_id=case_version_id)
+            .select_related("node").order_by("id")
+        ],
     }
 
 
@@ -1021,6 +994,8 @@ def save_world(case_version_id, node_id, request):
             scene_map.spawn_y = _int(map_def.get("spawnY"))
         if map_def.get("theme") is not None:
             scene_map.theme = map_def.get("theme")
+        if map_def.get("ambient") is not None:
+            scene_map.ambient_json = _write_map(map_def.get("ambient"))
         scene_map.save()
 
     objects = request.get("objects")

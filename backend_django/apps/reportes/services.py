@@ -1,13 +1,11 @@
-"""Mirrors Spring ReporteService 1:1 (domain/reporte/ReporteService.java).
+"""Reporting del simulador: dashboard global + reporte por grupo + export CSV.
 
-Blends legacy quiz data (sesiones_juego / respuestas) with simulation data
-(simulation_attempts_v2 / attempt_events / reflection_journals /
-rubric_evaluations). Dashboard aggregates are GLOBAL; the group report is scoped
-to a grupo's students. CSV export returns a plain string (no JSON envelope) and
-replicates Spring's manual ``String.format`` layout byte-for-byte (US-style
-``.`` decimals, ``,`` delimiters, trailing ``\n`` per line — no csv quoting).
+Extraído de la app legacy ``sesiones`` (T3.2). Todas las métricas son
+solo-simulación (SimulationAttempt / AttemptEvent / ReflectionJournal /
+RubricEvaluation); se removió la mezcla del quiz legacy. El CSV se devuelve como
+string plano (sin envoltorio JSON), con ``.`` decimal y ``,`` delimitador.
 """
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -22,8 +20,6 @@ from apps.simulation.models.attempt import (
     SimulationAttempt,
 )
 from apps.simulation.models.rubric import RubricEvaluation
-
-from .models import SesionJuego
 
 User = get_user_model()
 
@@ -74,11 +70,6 @@ def _count_rubrics(attempt_ids):
 def get_dashboard():
     start_of_day = datetime.combine(timezone.now().date(), time.min)
 
-    sesiones_completadas_hoy = SesionJuego.objects.filter(
-        completado=True,
-        fecha_fin__gte=start_of_day,
-        fecha_fin__lt=start_of_day + timedelta(days=1),
-    ).count()
     simulaciones_completadas_hoy = SimulationAttempt.objects.filter(
         status__in=SCORED_STATUSES, ended_at__gte=start_of_day
     ).count()
@@ -88,30 +79,12 @@ def get_dashboard():
     simulaciones_completadas = SimulationAttempt.objects.filter(
         status__in=SCORED_STATUSES
     ).count()
-
-    avg_legacy = float(
-        SesionJuego.objects.filter(completado=True).aggregate(a=Avg("puntaje_total"))["a"]
-        or 0
-    )
     avg_sim = float(
         SimulationAttempt.objects.filter(status__in=SCORED_STATUSES).aggregate(
             a=Avg("accumulated_score")
         )["a"]
         or 0
     )
-
-    ultimas_sesiones = [
-        {
-            "id": s.id,
-            "casoTitulo": s.caso.titulo,
-            "estudiante": _nombre_completo(s.estudiante),
-            "puntaje": s.puntaje_total,
-            "completado": s.completado,
-        }
-        for s in SesionJuego.objects.filter(completado=True)
-        .select_related("caso", "estudiante")
-        .order_by("-fecha_fin")[:10]
-    ]
 
     ultimos_intentos = [
         {
@@ -125,37 +98,14 @@ def get_dashboard():
             "case_version__simulation_case", "student"
         ).order_by("-started_at")[:10]
     ]
-
-    intentos_recientes = [
-        {
-            "id": f"legacy-{s['id']}",
-            "casoTitulo": s["casoTitulo"],
-            "estudiante": s["estudiante"],
-            "puntaje": s["puntaje"],
-            "estado": "COMPLETADO" if s["completado"] else "EN_PROGRESO",
-            "origen": "LEGACY",
-        }
-        for s in ultimas_sesiones
-    ] + [
-        {
-            "id": a["id"],
-            "casoTitulo": a["casoTitulo"],
-            "estudiante": a["estudiante"],
-            "puntaje": a["puntaje"],
-            "estado": a["estado"],
-            "origen": "SIMULATION",
-        }
-        for a in ultimos_intentos
-    ]
     intentos_recientes = sorted(
-        intentos_recientes, key=lambda x: x["puntaje"], reverse=True
+        ultimos_intentos, key=lambda x: x["puntaje"], reverse=True
     )[:10]
 
     return {
-        "estudiantesActivos": sesiones_completadas_hoy + simulaciones_completadas_hoy,
-        "casosCompletadosHoy": simulaciones_completadas_hoy,
-        "puntajePromedioGlobal": avg_sim if avg_sim > 0 else avg_legacy,
-        "ultimasSesiones": ultimas_sesiones,
+        "estudiantesActivos": simulaciones_completadas_hoy,
+        "simulacionesCompletadasHoy": simulaciones_completadas_hoy,
+        "puntajePromedioGlobal": avg_sim,
         "simulacionesCompletadas": simulaciones_completadas,
         "simulacionesEnProgreso": simulaciones_en_progreso,
         "puntajePromedioSimulacion": avg_sim,
@@ -180,93 +130,19 @@ def get_dashboard():
 
 
 # --- Group report ----------------------------------------------------------
-def generar_reporte_grupo(grupo_id, caso_id, case_version_id):
+def generar_reporte_grupo(grupo_id, case_version_id):
     grupo = Grupo.objects.filter(pk=grupo_id).first()
     if not grupo:
         raise NotFound(f"Grupo no encontrado: {grupo_id}")
-
-    legacy = _build_legacy_report(grupo_id, caso_id)
     simulacion = (
         _build_simulation_report(grupo, case_version_id)
         if case_version_id is not None
         else None
     )
-
     return {
-        "grupoId": legacy["grupoId"],
-        "casoId": legacy["casoId"],
+        "grupoId": grupo_id,
         "caseVersionId": case_version_id,
-        "totalSesiones": legacy["totalSesiones"],
-        "puntajePromedio": legacy["puntajePromedio"],
-        "tasaAciertos": legacy["tasaAciertos"],
-        "tiempoPromedioMs": legacy["tiempoPromedioMs"],
-        "estudiantes": legacy["estudiantes"],
         "simulacion": simulacion,
-    }
-
-
-def _empty_legacy(grupo_id, caso_id):
-    return {
-        "grupoId": grupo_id,
-        "casoId": caso_id,
-        "totalSesiones": 0,
-        "puntajePromedio": 0.0,
-        "tasaAciertos": 0.0,
-        "tiempoPromedioMs": 0,
-        "estudiantes": [],
-    }
-
-
-def _build_legacy_report(grupo_id, caso_id):
-    if caso_id is None:
-        return _empty_legacy(grupo_id, None)
-
-    student_ids = _grupo_student_ids(grupo_id)
-    sesiones = list(
-        SesionJuego.objects.filter(
-            estudiante_id__in=student_ids, caso_id=caso_id, completado=True
-        )
-        .select_related("estudiante")
-        .prefetch_related("respuestas")
-    )
-    if not sesiones:
-        return _empty_legacy(grupo_id, caso_id)
-
-    puntaje_promedio = sum(s.puntaje_total for s in sesiones) / len(sesiones)
-
-    all_resp = [r for s in sesiones for r in s.respuestas.all()]
-    total_resp = len(all_resp)
-    correctas = sum(1 for r in all_resp if r.es_correcta)
-    tasa_aciertos = (correctas / total_resp * 100) if total_resp > 0 else 0.0
-    tiempos = [r.tiempo_respuesta_ms for r in all_resp if r.tiempo_respuesta_ms is not None]
-    tiempo_promedio = (sum(tiempos) / len(tiempos)) if tiempos else 0.0
-
-    estudiantes = []
-    for s in sesiones:
-        resp = list(s.respuestas.all())
-        total = len(resp)
-        corr = sum(1 for r in resp if r.es_correcta)
-        s_tiempos = [r.tiempo_respuesta_ms for r in resp if r.tiempo_respuesta_ms is not None]
-        tiempo = (sum(s_tiempos) / len(s_tiempos)) if s_tiempos else 0.0
-        estudiantes.append(
-            {
-                "id": s.estudiante_id,
-                "nombre": _nombre_completo(s.estudiante),
-                "puntaje": s.puntaje_total,
-                "porcentajeAciertos": (corr / total * 100) if total > 0 else 0.0,
-                "tiempoPromedioMs": float(tiempo),
-                "estado": "COMPLETADO" if s.completado else "EN_PROGRESO",
-            }
-        )
-
-    return {
-        "grupoId": grupo_id,
-        "casoId": caso_id,
-        "totalSesiones": len(sesiones),
-        "puntajePromedio": float(puntaje_promedio),
-        "tasaAciertos": float(tasa_aciertos),
-        "tiempoPromedioMs": int(tiempo_promedio),  # Spring casts (long)
-        "estudiantes": estudiantes,
     }
 
 
@@ -368,8 +244,8 @@ def _estudiante_sim_dto(student, attempts):
 
 
 # --- CSV export ------------------------------------------------------------
-def exportar_csv(grupo_id, caso_id, case_version_id):
-    reporte = generar_reporte_grupo(grupo_id, caso_id, case_version_id)
+def exportar_csv(grupo_id, case_version_id):
+    reporte = generar_reporte_grupo(grupo_id, case_version_id)
     parts = []
     if reporte["simulacion"] is not None:
         parts.append(
@@ -393,17 +269,4 @@ def exportar_csv(grupo_id, caso_id, case_version_id):
                     e["estado"],
                 )
             )
-        return "".join(parts)
-
-    parts.append("Estudiante,Puntaje,% Aciertos,Tiempo Promedio (ms),Estado\n")
-    for e in reporte["estudiantes"]:
-        parts.append(
-            "{},{},{:.1f},{:.0f},{}\n".format(
-                e["nombre"],
-                e["puntaje"],
-                e["porcentajeAciertos"],
-                e["tiempoPromedioMs"],
-                e["estado"],
-            )
-        )
     return "".join(parts)

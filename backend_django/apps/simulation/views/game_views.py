@@ -163,6 +163,21 @@ class ToolUseView(APIView):
         return api_ok(result, message="Herramienta usada")
 
 
+class EnterRoomView(APIView):
+    permission_classes = [IsEstudianteOrAdmin]
+
+    def post(self, request, attempt_id):
+        result = world_service.enter_room(
+            attempt_id,
+            request.data.get("attemptToken"),
+            request.data.get("targetNodeKey"),
+            request.data.get("entryX"),
+            request.data.get("entryY"),
+            request.user,
+        )
+        return api_ok(result, message="Sala cambiada")
+
+
 class CatalogView(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -26,10 +26,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     "apps.users",
-    "apps.casos",
     "apps.grupos",
-    "apps.sesiones",
     "apps.simulation",
+    "apps.reportes",
     "apps.progression",
 ]
 

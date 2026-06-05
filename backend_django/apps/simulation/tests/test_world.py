@@ -152,3 +152,38 @@ def test_world_objects_expose_movement_fields(estudiante, case_version_id):
         assert isinstance(obj["movementPattern"], dict)
         assert isinstance(obj["metadata"], dict)
         assert isinstance(obj["facing"], str)
+
+
+# --- Fase 5: spatial doors (enter-room, non-scored, decoupled from DAG) --------
+def test_enter_room_moves_and_persists(estudiante, case_version_id):
+    from apps.simulation.models import SceneMap
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    cur = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]["map"]["key"]
+    target = (
+        SceneMap.objects.filter(case_version_id=case_version_id)
+        .select_related("node").exclude(map_key=cur).first()
+    )
+    assert target, "SIM-VBG-001 should have multiple rooms"
+
+    resp = c.post(
+        f"/api/simulation/attempts/{attempt_id}/enter-room",
+        {"attemptToken": token, "targetNodeKey": target.node.node_key, "entryX": 100, "entryY": 120},
+        format="json",
+    )
+    assert resp.status_code == 200
+    assert resp.data["data"]["map"]["key"] == target.map_key
+    # persists across a fresh /world load (door room is NOT reset to the DAG node's map)
+    again = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
+    assert again["map"]["key"] == target.map_key
+
+
+def test_enter_room_invalid_node(estudiante, case_version_id):
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    resp = c.post(
+        f"/api/simulation/attempts/{attempt_id}/enter-room",
+        {"attemptToken": token, "targetNodeKey": "no-existe", "entryX": 0, "entryY": 0},
+        format="json",
+    )
+    assert resp.status_code in (400, 404)

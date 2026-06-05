@@ -4,10 +4,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
     path("api/auth/", include("apps.users.urls")),
-    path("api/casos", include("apps.casos.urls")),
     path("api/grupos", include("apps.grupos.urls")),
-    path("api/sesiones", include("apps.sesiones.urls")),
-    path("api/reportes", include("apps.sesiones.urls_reportes")),
+    path("api/reportes", include("apps.reportes.urls")),
     path("api/simulation", include("apps.simulation.urls")),
     path("api/admin/cases", include("apps.simulation.urls_admin")),
     path("api/instructor", include("apps.simulation.urls_instructor")),

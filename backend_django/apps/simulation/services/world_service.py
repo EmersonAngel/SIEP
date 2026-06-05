@@ -22,29 +22,15 @@ from ..models import (
     SceneMap,
 )
 from . import game_service
+from shared.jsonutils import (
+    coerce_int as _int,
+    read_map as _read_map,
+    read_string_list as _read_string_list,
+    write_map as _write_map,
+)
 
 
 # ─── json helpers ─────────────────────────────────────────────────────────────
-def _read_string_list(raw):
-    if not raw:
-        return []
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, list) else []
-    except (ValueError, TypeError):
-        return []
-
-
-def _read_map(raw):
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        value = json.loads(raw)
-        return value if isinstance(value, dict) else {}
-    except (ValueError, TypeError):
-        return {}
-
-
 def _append_unique(raw_json, value):
     items = _read_string_list(raw_json)
     if value not in items:
@@ -168,6 +154,33 @@ def world_for_attempt(attempt):
     return _to_world_state(attempt, require_world_state(attempt))
 
 
+@transaction.atomic
+def enter_room(attempt_id, attempt_token, target_node_key, entry_x, entry_y, actor):
+    """Fase 5 — spatial door: load the target room's map for the attempt at the entry
+    point, WITHOUT advancing the DAG or scoring. Decoupled from the node via
+    flags.syncedNodeId so the next /world load won't reset it (until a decision does)."""
+    attempt = game_service._require_attempt(attempt_id, attempt_token, actor)
+    _require_in_progress(attempt)
+    target = (
+        SceneMap.objects.select_related("node")
+        .filter(node__case_version_id=attempt.current_node.case_version_id,
+                node__node_key=target_node_key)
+        .first()
+    )
+    if not target:
+        raise NotFound(f"No hay sala para el nodo destino: {target_node_key}")
+    state = require_world_state(attempt)
+    state.scene_map = target
+    state.player_x = _clamp(_int(entry_x), 0, target.width or 960)
+    state.player_y = _clamp(_int(entry_y), 0, target.height or 540)
+    flags = _read_map(state.flags_json)
+    flags["syncedNodeId"] = attempt.current_node_id  # keep — door room is intentional
+    state.flags_json = _write_map(flags)
+    state.save()
+    _save_event(attempt, "ROOM_ENTERED", f"Puerta hacia sala {target_node_key}")
+    return _to_world_state(attempt, state)
+
+
 # ─── internals ────────────────────────────────────────────────────────────────
 def require_world_state(attempt):
     expected_map = SceneMap.objects.filter(node_id=attempt.current_node_id).first()
@@ -185,10 +198,16 @@ def require_world_state(attempt):
             player_x=expected_map.spawn_x,
             player_y=expected_map.spawn_y,
         )
-    if state.scene_map_id is None or state.scene_map_id != expected_map.id:
+    # Fase 5: the displayed room is reset to the DAG node's map ONLY when the node
+    # changed (e.g. a decision advanced it), tracked via flags.syncedNodeId. Between
+    # node changes, a spatial door may have set a different room — respect it.
+    flags = _read_map(state.flags_json)
+    if state.scene_map_id is None or flags.get("syncedNodeId") != attempt.current_node_id:
         state.scene_map = expected_map
         state.player_x = expected_map.spawn_x
         state.player_y = expected_map.spawn_y
+        flags["syncedNodeId"] = attempt.current_node_id
+        state.flags_json = _write_map(flags)
     state.save()  # updated_at is auto_now
     return state
 
