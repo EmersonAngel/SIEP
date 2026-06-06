@@ -18,29 +18,23 @@ Contenido clínico real de VBG / feminicidio / NNA. Los repos **deben ser privad
 
 ---
 
-## 2. Cross-repo — estructura real
+## 2. Monorepo — estructura real
 
-| Repositorio | Directorio local | Descripción |
-|---|---|---|
-| `Jsua3/psico_project_v2` | `D:/Sua_Files/IdeaProjects/psico_project_v2/` | Backend Django activo + toda la documentación (`docs/`) |
-| `Jsua3/Proyecto_psicologia` | `D:/Sua_Files/IdeaProjects/psicologia_proyecto/` | Frontend Angular + Spring FROZEN |
+**Un único repositorio activo:** `Jsua3/psico_project_v2`  
+Directorio local: `D:/Sua_Files/IdeaProjects/psico_project_v2/`
+
+> El repo `Jsua3/Proyecto_psicologia` permanece en GitHub como archivo histórico (historial git del frontend pre-monorepo). El backend Spring (`backend/`) allí está CONGELADO y no se toca.
 
 ### Árbol de directorios clave
 
 ```
-psico_project_v2/
+psico_project_v2/          ← MONOREPO — único repo activo
   backend_django/           ← código Python activo
     psychosim/settings/     ← base / local / test / production
     apps/                   ← ver §6
     shared/                 ← response.py, permissions.py, exceptions.py, jsonutils.py
     .venv/                  ← entorno virtual (gitignored)
-  docs/
-    PROMPT_MAESTRO.md       ← este archivo
-    superpowers/specs/      ← specs por slice
-    superpowers/plans/      ← planes de implementación por slice
-
-psicologia_proyecto/
-  admin-panel/              ← Angular 21 (toda la UI)
+  frontend/                 ← Angular 21 (antes en Proyecto_psicologia/admin-panel/)
     src/app/
       core/                 ← auth, api services, models, guards, config
       features/             ← ver §9
@@ -52,9 +46,12 @@ psicologia_proyecto/
     proxy.conf.json         ← apunta a Django :8091
     proxy.django.json       ← preset Django :8091
     proxy.spring.json       ← preset Spring :8090 (alternativa)
-  backend/                  ← Spring Boot Java — CONGELADO, es respaldo, NO tocar
   docker-compose.yml        ← solo el servicio `db` se usa (Postgres :5433)
   .env.example              ← plantilla de secretos (POSTGRES_PASSWORD, JWT_SECRET…)
+  docs/
+    PROMPT_MAESTRO.md       ← este archivo
+    superpowers/specs/      ← specs por slice
+    superpowers/plans/      ← planes de implementación por slice
 ```
 
 ### Principio arquitectónico clave
@@ -329,11 +326,11 @@ El runtime tiene **dos caminos** que coexisten **a propósito**:
 
 ---
 
-## 11. Cómo correr (Windows)
+## 11. Cómo correr (Windows — monorepo)
 
 ```powershell
-# 1. Levantar BD (desde psicologia_proyecto/) — requiere Docker Desktop
-cd D:/Sua_Files/IdeaProjects/psicologia_proyecto
+# 1. Levantar BD (desde raíz del monorepo) — requiere Docker Desktop
+cd D:/Sua_Files/IdeaProjects/psico_project_v2
 docker compose up -d db
 # → Postgres en localhost:5433, BD psychosim; volumen postgres_data ya tiene Flyway V1-V8 + seeds
 
@@ -343,10 +340,11 @@ cd D:/Sua_Files/IdeaProjects/psico_project_v2/backend_django
 ./.venv/Scripts/python.exe manage.py check       # verificar config
 ./.venv/Scripts/python.exe manage.py runserver 8091   # servidor dev (DJANGO_SETTINGS_MODULE=psychosim.settings.local)
 
-# 3. Frontend Angular (desde admin-panel/)
-cd D:/Sua_Files/IdeaProjects/psicologia_proyecto/admin-panel
-npm start              # ng serve → http://localhost:4200 (proxy a :8091)
-npm run build          # build de producción
+# 3. Frontend Angular (desde frontend/)
+cd D:/Sua_Files/IdeaProjects/psico_project_v2/frontend
+npm install              # primera vez o tras cambios en package.json
+npm start                # ng serve → http://localhost:4200 (proxy a :8091)
+npm run build            # build de producción
 npm test -- --watch=false    # jest unit tests
 ```
 
@@ -426,15 +424,15 @@ Roadmap completo: `docs/superpowers/2026-06-05-cleanup-tier3-roadmap.md`.
 
 ## 15. Deudas conocidas y próximos pasos
 
-| Prioridad | Ítem |
-|---|---|
-| 🔴 Alta | **Landing page** — `features/public/landing.component` existe como archivo/ruta pero **no está implementada como landing institucional real**. Pendiente: diseño y contenido de la presentación pública de SIEP. |
-| 🔴 Alta | **Repos privados** — actualmente públicos (`"private": false`). Hacer privados en GitHub Settings. |
-| 🟡 Media | **Mergear PR** `integrate/case-editor-into-main` → `main` (frontend, fast-forward). |
-| 🟡 Media | **Reconciliar `main` local** (16 commits "living-world": camera-follow, audio, multi-room, NPCs) con `origin/main`. Posibles conflictos con ACT. |
-| 🟡 Media | **T3.3** (retiro Spring): diferido; retomar cuando Django esté en producción + plan de schema-ownership. |
-| 🟢 Baja | Carpetas huérfanas `apps/casos/` y `apps/sesiones/` en disco (solo tienen `__pycache__/` y `migrations/`). Pueden eliminarse con `git rm -r`. |
-| 🟢 Baja | Warnings NG8107 pre-existentes en `dialogue-panel.component.ts` (no bloquean build). |
+| Prioridad | Ítem | Estado |
+|---|---|---|
+| ✅ Resuelta | **Landing page** — implementada completamente en `frontend/src/app/features/public/` (HTML + SCSS + TS) | HECHO |
+| ✅ Resuelta | **Monorepo** — frontend consolidado en `psico_project_v2/frontend/` | HECHO |
+| 🔴 Alta | **Repos privados** — `Jsua3/psico_project_v2` y `Jsua3/Proyecto_psicologia` actualmente públicos (`"private": false`). Hacer privados en GitHub Settings → Danger Zone. | PENDIENTE (manual) |
+| 🟡 Media | **Reconciliar commits `main` local** del frontend (16 commits "living-world": camera-follow, audio, multi-room, NPCs) con `origin/main` del repo archivado. Ahora se gestiona desde el monorepo. | PENDIENTE |
+| 🟡 Media | **T3.3** (retiro Spring): diferido; retomar cuando Django esté en producción + plan de schema-ownership. | DIFERIDO |
+| 🟢 Baja | Carpetas huérfanas `apps/casos/` y `apps/sesiones/` en disco (solo tienen `__pycache__/` y `migrations/`). Pueden eliminarse con `git rm -r`. | BAJA |
+| 🟢 Baja | Warnings NG8107 pre-existentes en `dialogue-panel.component.ts` (no bloquean build). | BAJA |
 
 ---
 
@@ -480,3 +478,4 @@ Roadmap completo: `docs/superpowers/2026-06-05-cleanup-tier3-roadmap.md`.
 | 2026-06-05 | **Cleanup Tier 3:** T3.1 cerrado como coexistencia justificada; **T3.2** ejecutado (retiro quiz, extracción `apps.reportes` sim-only, frontend sim-only); T3.3 diferido. pytest 107, jest 64, ng build, smoke. |
 | 2026-06-05 | **Integración frontend** `integrate/case-editor-into-main`: línea del editor + T3.2 integrada sobre `origin/main` (ACT); conflictos resueltos; PR abierta. ng build OK, jest 64/64. |
 | 2026-06-05 | **Este PROMPT_MAESTRO** reescrito con mapa completo del sistema (componentes, rutas, apps, endpoints, deudas, ramas). Deuda de landing identificada por el usuario. |
+| 2026-06-06 | **Consolidación monorepo.** Frontend Angular (`Proyecto_psicologia/admin-panel/`) movido a `psico_project_v2/frontend/`. Docker-compose y .env.example en raíz. `Jsua3/Proyecto_psicologia` permanece como archivo histórico. Landing page marcada como completada. PROMPT_MAESTRO actualizado para reflejar estructura monorepo. |
