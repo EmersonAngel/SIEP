@@ -43,7 +43,12 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
               [attr.aria-label]="'Estado de estrés del caso: ' + game.stressIndex + '%. ' + stressLabel()">
               <div class="hud-hearts" aria-hidden="true" [style.color]="stressColor()">
                 @for (h of hearts(); track $index) {
-                  <mat-icon class="heart heart--{{ h }}">{{ h === 'empty' ? 'favorite_border' : 'favorite' }}</mat-icon>
+                  <span class="heart" [class.heart--half]="h === 'half'" [class.heart--full]="h === 'full'">
+                    <svg viewBox="0 0 24 24" class="heart-svg">
+                      <path class="heart-outline" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
+                      <path class="heart-fill" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
+                    </svg>
+                  </span>
                 }
               </div>
               <span class="stress-pct" [style.color]="stressColor()" aria-hidden="true">{{ game.stressIndex }}%</span>
@@ -137,10 +142,14 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-brand { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding-right: 8px; margin-right: 4px; border-right: 1px solid rgba(182,156,255,.18); }
     .brand-glyph { color: #B69CFF; flex-shrink: 0; }
     .brand-word { font-family: 'Poppins', system-ui, sans-serif; font-weight: 900; font-size: .82rem; letter-spacing: .12em; color: #E7DDFF; }
-    .hud-hearts { display: inline-flex; align-items: center; gap: 1px; }
-    .hud-hearts .heart { font-size: 15px; width: 15px; height: 15px; }
-    .heart--empty { opacity: .42; }
-    .heart--half { opacity: .7; }
+    .hud-hearts { display: inline-flex; align-items: center; gap: 2px; }
+    .heart { display: inline-block; width: 15px; height: 15px; line-height: 0; }
+    .heart-svg { width: 15px; height: 15px; display: block; }
+    .heart-outline { fill: none; stroke: currentColor; stroke-width: 1.7; opacity: .6; }
+    .heart-fill { fill: currentColor; clip-path: inset(0 100% 0 0); }
+    .heart--half .heart-fill { clip-path: inset(0 50% 0 0); }
+    .heart--full .heart-fill { clip-path: inset(0 0 0 0); }
+    .heart--full .heart-outline { opacity: 1; }
     .stress-pct { font-family: 'JetBrains Mono', monospace; font-size: .78rem; min-width: 38px; transition: color var(--psy-motion-ui); }
 
     .hud-patient { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -214,10 +223,10 @@ export class SimulationHudComponent {
   readonly hearts = computed<Heart[]>(() => stressToHearts(this.attempt()?.stressIndex ?? 0));
 
   readonly stressColor = computed(() => ({
-    calm:     'var(--psy-teal-deep, #2a7a6e)',
-    moderate: '#7a8a3e',
-    high:     '#b07830',
-    critical: '#8b3145'
+    calm:     '#6EC67A',
+    moderate: '#F5B84B',
+    high:     '#F08C4B',
+    critical: '#E25A4F'
   })[this.stressTier()]);
 
   readonly stressLabel = computed(() => ({
