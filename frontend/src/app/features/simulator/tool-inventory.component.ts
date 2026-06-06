@@ -9,7 +9,7 @@ import { ClinicalToolState } from '../../core/models/simulation.model';
   imports: [CommonModule, MatIconModule],
   template: `
     <div class="tool-hud" role="toolbar" aria-label="Inventario clínico de herramientas">
-      @for (tool of tools(); track tool.code) {
+      @for (tool of tools(); track tool.code; let i = $index) {
         <button
           class="tool-btn"
           type="button"
@@ -19,6 +19,7 @@ import { ClinicalToolState } from '../../core/models/simulation.model';
           [title]="tool.label + ' — ' + (inventory().includes(tool.code) ? 'Disponible' : 'No disponible')"
           [attr.aria-label]="tool.label + ': ' + tool.description + '. ' + (inventory().includes(tool.code) ? 'Disponible.' : 'No disponible.')"
           (click)="select.emit(tool.code)">
+          <span class="tool-key" aria-hidden="true">{{ i + 1 }}</span>
           <mat-icon aria-hidden="true">{{ tool.icon }}</mat-icon>
           <span class="tool-code" aria-hidden="true">{{ tool.code.slice(0, 4) }}</span>
         </button>
@@ -37,23 +38,23 @@ import { ClinicalToolState } from '../../core/models/simulation.model';
       place-items: center;
       width: 44px;
       height: 44px;
-      border: 1px solid rgba(79,163,165,.28);
+      border: 1px solid rgba(182,156,255,.28);
       border-radius: 10px;
       background: rgba(8,12,18,.76);
-      color: rgba(79,163,165,.55);
+      color: rgba(182,156,255,.6);
       cursor: pointer;
       padding: 0;
       transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
     }
     .tool-btn mat-icon { font-size: 20px; width: 20px; height: 20px; }
     .tool-btn--owned {
-      border-color: rgba(79,163,165,.5);
-      color: #4fa3a5;
+      border-color: rgba(182,156,255,.55);
+      color: #B69CFF;
     }
     .tool-btn--owned:hover {
-      border-color: rgba(79,163,165,.85);
-      background: rgba(79,163,165,.14);
-      box-shadow: 0 0 12px -4px rgba(79,163,165,.35);
+      border-color: rgba(182,156,255,.9);
+      background: rgba(124,77,255,.18);
+      box-shadow: 0 0 14px -4px rgba(124,77,255,.5);
     }
     .tool-btn--locked {
       opacity: .28;
@@ -70,8 +71,19 @@ import { ClinicalToolState } from '../../core/models/simulation.model';
       opacity: .7;
       pointer-events: none;
     }
+    .tool-key {
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-size: .56rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 900;
+      color: #cdbcff;
+      opacity: .85;
+      pointer-events: none;
+    }
     :focus-visible {
-      outline: 2px solid rgba(79,163,165,.7);
+      outline: 2px solid rgba(182,156,255,.7);
       outline-offset: 2px;
     }
   `]
