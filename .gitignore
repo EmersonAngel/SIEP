@@ -23,3 +23,13 @@ venv/
 desktop.ini
 .idea/
 .vscode/
+
+# ── Frontend Angular ──────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/qa-screenshots/
+frontend/.env
+
+# Docker / env
+*.env
