@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewChecked, Component, ElementRef, OnDestroy, ViewChild, effect, inject, input, output, signal } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
+import { AfterViewChecked, Component, ElementRef, HostListener, OnDestroy, ViewChild, effect, inject, input, output, signal } from '@angular/core';
 import { DialogueChoiceState, DialogueState, MapObjectState } from '../../core/models/simulation.model';
 import { AudioService } from './audio.service';
+import { digitIndex } from './dialogue-keys.util';
 
 const CHARS_PER_SEC = 22;
 const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
@@ -10,7 +10,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
 @Component({
   selector: 'app-dialogue-panel',
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule],
   template: `
     @if (dialogue(); as d) {
       <div #dialogueBox
@@ -23,7 +23,10 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         aria-live="polite">
 
         <div class="portrait" aria-hidden="true">
-          <mat-icon>{{ portraitIcon(d.portraitKey) }}</mat-icon>
+          <svg viewBox="0 0 48 48" class="portrait-svg" width="40" height="40">
+            <circle cx="24" cy="18" r="9" fill="currentColor"/>
+            <path d="M8 44 C8 33 15 28 24 28 C33 28 40 33 40 44 Z" fill="currentColor"/>
+          </svg>
           @if (d.emotion && d.emotion !== 'neutral') {
             <span class="emotion-chip" [attr.data-emotion]="d.emotion"></span>
           }
@@ -36,15 +39,16 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
 
           @if (isTypingComplete() && d.choices.length) {
             <div class="choices" role="group" aria-label="Opciones de intervención">
-              @for (choice of d.choices; track choice.key) {
+              @for (choice of d.choices; track choice.key; let i = $index) {
                 <button
                   type="button"
                   class="choice-btn"
                   [class.choice-btn--recommended]="choice.isRecommended"
                   [class.choice-btn--prohibited]="choice.isProhibited"
-                  [attr.aria-label]="choice.text + (choice.isRecommended ? ' (recomendada)' : '') + (choice.isProhibited ? ' (contraindicada)' : '')"
+                  [attr.aria-label]="(i + 1) + '. ' + choice.text + (choice.isRecommended ? ' (recomendada)' : '') + (choice.isProhibited ? ' (contraindicada)' : '')"
                   (mouseenter)="onChoiceHover()"
                   (click)="handleChoice(choice)">
+                  <span class="choice-num" aria-hidden="true">{{ i + 1 }}</span>
                   <span class="choice-btn__icon" aria-hidden="true"></span>
                   <span class="choice-btn__body">
                     <span class="choice-btn__label">{{ choice.text }}</span>
@@ -67,7 +71,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
               Saltar <span aria-hidden="true">▶</span>
             </button>
           }
-          @if (isTypingComplete() && !d.choices?.length) {
+          @if (isTypingComplete() && !d.choices.length) {
             <button type="button" class="close-btn psy-button psy-button--ghost"
               (click)="close.emit()"
               aria-label="Cerrar diálogo (Esc)">
@@ -87,7 +91,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       gap: 0;
       padding: 0;
       background: rgba(8,12,18,.95);
-      border-top: 2px solid rgba(79,163,165,.35);
+      border-top: 2px solid rgba(182,156,255,.4);
       backdrop-filter: blur(16px) saturate(110%);
       animation: strip-rise 160ms cubic-bezier(.2,.8,.2,1) both;
     }
@@ -106,14 +110,11 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       min-height: 180px;
       display: grid;
       place-items: center;
-      border-right: 1px solid rgba(79,163,165,.2);
-      background: rgba(79,163,165,.06);
+      border-right: 1px solid rgba(182,156,255,.2);
+      background: rgba(124,77,255,.08);
     }
-    .portrait mat-icon {
-      color: var(--siep-blue-soft);
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+    .portrait-svg {
+      color: #B69CFF;
     }
     .emotion-chip {
       position: absolute;
@@ -121,7 +122,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       right: 12px;
       width: 10px;
       height: 10px;
-      background: var(--siep-blue-soft);
+      background: #B69CFF;
       border: 2px solid rgba(8,12,18,.92);
       border-radius: 50%;
     }
@@ -140,7 +141,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       font-weight: 900;
       letter-spacing: .12em;
       text-transform: uppercase;
-      color: #4fa3a5;
+      color: #B69CFF;
     }
     .strip--supervisory .speaker-name { color: #5d9278; }
     .strip--warning .speaker-name { color: #a85062; }
@@ -156,7 +157,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     .cursor {
       display: inline-block;
       animation: blink .6s step-end infinite;
-      color: #4fa3a5;
+      color: #B69CFF;
       margin-left: 1px;
     }
     .cursor--done { display: none; }
@@ -169,13 +170,13 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     }
     .choice-btn {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: auto auto minmax(0, 1fr);
       gap: 10px;
       align-items: start;
       min-height: 64px;
       padding: 11px 12px;
       border-radius: 14px;
-      border: 2px solid rgba(79,163,165,.32);
+      border: 1px solid rgba(182,156,255,.3);
       background: rgba(255,255,255,.06);
       color: rgba(232,240,244,.9);
       font: inherit;
@@ -183,17 +184,23 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       line-height: 1.35;
       text-align: left;
       cursor: pointer;
-      box-shadow: 4px 4px 0 rgba(79,163,165,.08);
+      box-shadow: 0 14px 34px -22px rgba(124,77,255,.5);
       transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
     }
     .choice-btn:hover {
       transform: translateY(-1px);
-      border-color: rgba(79,163,165,.7);
-      background: rgba(79,163,165,.14);
+      border-color: rgba(182,156,255,.7);
+      background: rgba(124,77,255,.16);
     }
     .choice-btn:focus-visible {
-      outline: 3px solid rgba(157,192,232,.45);
+      outline: 3px solid rgba(182,156,255,.5);
       outline-offset: 3px;
+    }
+    .choice-num {
+      display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0;
+      border-radius: 7px; border: 1px solid rgba(182,156,255,.5);
+      background: rgba(124,77,255,.16); color: #cdbcff;
+      font-family: 'JetBrains Mono', monospace; font-weight: 900; font-size: .76rem;
     }
     .choice-btn__icon {
       display: grid;
@@ -201,8 +208,8 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       width: 30px;
       height: 30px;
       border-radius: 9px;
-      background: rgba(79,163,165,.12);
-      color: #9dc0e8;
+      background: rgba(124,77,255,.14);
+      color: #cdbcff;
     }
     .choice-btn__icon::before {
       content: '';
@@ -241,11 +248,11 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       opacity: .85;
     }
     .choice-btn--recommended {
-      border-color: rgba(59,130,246,.5);
-      background: rgba(59,130,246,.1);
-      color: rgba(147,197,253,.95);
+      border-color: rgba(108,192,199,.5);
+      background: rgba(108,192,199,.12);
+      color: #bfeef1;
     }
-    .choice-btn--recommended:hover { border-color: rgba(59,130,246,.8); background: rgba(59,130,246,.2); }
+    .choice-btn--recommended:hover { border-color: rgba(108,192,199,.85); background: rgba(108,192,199,.2); }
     .choice-btn--prohibited {
       border-color: rgba(168,80,98,.45);
       background: rgba(168,80,98,.08);
@@ -317,6 +324,16 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
     this.audio.play('choice-hover');
   }
 
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(e: KeyboardEvent): void {
+    const d = this.dialogue();
+    if (!d || !this.isTypingComplete() || !d.choices.length) return;
+    const idx = digitIndex(e.key);
+    if (idx === null || idx >= d.choices.length) return;
+    e.preventDefault();
+    this.handleChoice(d.choices[idx]);
+  }
+
   ngAfterViewChecked() {
     // Ensure dialogue box is scrolled to bottom when new text renders
     if (this.dialogueBox) {
@@ -353,11 +370,6 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
 
   fullText(): string {
     return this.dialogue()?.lines?.map(l => l.text).join(' ') ?? '';
-  }
-
-  portraitIcon(icon: string | null): string {
-    if (icon && /^[a-z0-9_]+$/.test(icon)) return icon;
-    return 'person';
   }
 
   private startTypewriter(text: string) {
