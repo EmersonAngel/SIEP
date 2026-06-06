@@ -35,6 +35,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/simulator/simulation-play.component').then(m => m.SimulationPlayComponent)
       },
       {
+        path: 'personaje',
+        canActivate: [roleGuard('ESTUDIANTE', 'ADMIN')],
+        loadComponent: () => import('./features/character/character-editor.component').then(m => m.CharacterEditorComponent)
+      },
+      {
         path: 'casos/:caseVersionId/editor',
         canActivate: [roleGuard('ADMIN')],
         loadComponent: () => import('./features/simulator/case-editor.component').then(m => m.CaseEditorComponent)

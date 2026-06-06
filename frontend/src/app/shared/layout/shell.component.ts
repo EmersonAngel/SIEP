@@ -650,6 +650,7 @@ export class ShellComponent implements OnDestroy {
   readonly navItems: NavItem[] = [
     { label: 'Dashboard',  icon: 'dashboard',       route: '/portal/dashboard',          caption: 'Seguimiento formativo', roles: ['ESTUDIANTE', 'PROFESOR', 'ADMIN'] },
     { label: 'Simulador',  icon: 'play_circle',     route: '/portal/simulador',          caption: 'Simulación formativa', roles: ['ESTUDIANTE', 'PROFESOR', 'ADMIN'] },
+    { label: 'Mi personaje', icon: 'face',          route: '/portal/personaje',          caption: 'Editor de avatar', roles: ['ESTUDIANTE', 'ADMIN'] },
     { label: 'Docente',    icon: 'timeline',        route: '/portal/docente/trazabilidad', caption: 'Trazabilidad y rúbricas', roles: ['PROFESOR', 'ADMIN'] },
     { label: 'Grupos',     icon: 'groups',          route: '/portal/grupos',             caption: 'Cohortes académicas', roles: ['PROFESOR', 'ADMIN'] },
     { label: 'Reportes',   icon: 'analytics',       route: '/portal/reportes',           caption: 'Evaluación por rúbricas', roles: ['PROFESOR', 'ADMIN'] },
