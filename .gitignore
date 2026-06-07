@@ -42,4 +42,4 @@ backend_django/psychosim/settings/local.py
 backend_django/media/
 
 # Docker / env
-*.env
+# (*.env ya está cubierto por `.env.*` en la sección "Env / secrets" arriba)
