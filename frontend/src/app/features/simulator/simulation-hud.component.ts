@@ -15,6 +15,8 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
   template: `
     @if (attempt(); as game) {
       <div class="hud-shell liquid-glass"
+        role="complementary"
+        aria-label="Indicadores del simulador"
         [class.hud--stress-high]="stressTier() === 'high'"
         [class.hud--stress-critical]="stressTier() === 'critical'">
 
@@ -34,6 +36,15 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
             <div class="hud-score" aria-label="Seguimiento formativo: {{ game.accumulatedScore }} puntos">
               <mat-icon aria-hidden="true">fact_check</mat-icon>
               <strong>{{ game.accumulatedScore }}</strong>
+            </div>
+
+            <!-- Hidden progressbar for session progress (screen readers) -->
+            <div class="sr-only"
+              role="progressbar"
+              [attr.aria-valuenow]="game.stressIndex"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label="Progreso de la sesión: puntaje {{ game.accumulatedScore }}">
             </div>
 
             <div class="hud-stress"
@@ -185,6 +196,15 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-objective-line span { font-size: .74rem; line-height: 1.3; color: rgba(232,240,244,.82); }
     .hud-objective-line strong { color: #cdbcff; font-weight: 800; margin-right: 4px; }
 
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important; height: 1px !important;
+      padding: 0 !important; margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0,0,0,0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
     @keyframes stress-pulse {
       0%   { box-shadow: 0 0 0 0 rgba(212,160,80,.4); }
       70%  { box-shadow: 0 0 0 6px rgba(212,160,80,0); }

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewChecked, Component, ElementRef, HostListener, OnDestroy, ViewChild, effect, inject, input, output, signal } from '@angular/core';
 import { DialogueChoiceState, DialogueState, MapObjectState } from '../../core/models/simulation.model';
-import { AudioService } from './audio.service';
+import { AudioDirectorService } from './audio-director.service';
 import { digitIndex } from './dialogue-keys.util';
 
 const CHARS_PER_SEC = 22;
@@ -18,9 +18,8 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         [class.strip--warning]="interaction()?.type === 'WARNING'"
         [class.strip--supervisory]="d.speakerName === 'Supervisión clínica'"
         role="dialog"
-        aria-modal="false"
-        [attr.aria-label]="d.speakerName + ': ' + fullText()"
-        aria-live="polite">
+        aria-modal="true"
+        [attr.aria-label]="d.speakerName + ': ' + fullText()">
 
         <div class="portrait" aria-hidden="true">
           <svg viewBox="0 0 48 48" class="portrait-svg" width="40" height="40">
@@ -35,7 +34,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         <!-- Text area -->
         <div class="strip-body">
           <p class="speaker-name">{{ d.speakerName }}</p>
-          <p class="dialogue-text" aria-live="polite">{{ displayedText() }}<span class="cursor" [class.cursor--done]="isTypingComplete()" aria-hidden="true">▋</span></p>
+          <p class="dialogue-text" role="status" aria-live="polite" aria-atomic="true">{{ displayedText() }}<span class="cursor" [class.cursor--done]="isTypingComplete()" aria-hidden="true">▋</span></p>
 
           @if (isTypingComplete() && d.choices.length) {
             <div class="choices" role="group" aria-label="Opciones de intervención">
@@ -302,7 +301,7 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
 
   private typewriterHandle: ReturnType<typeof setInterval> | null = null;
   private currentLineIndex = 0;
-  private readonly audio = inject(AudioService);
+  private readonly audio = inject(AudioDirectorService);
 
   constructor() {
     effect(() => {
@@ -310,7 +309,7 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
       this.stopTypewriter();
       this.currentLineIndex = 0;
       if (d?.lines?.length) {
-        this.audio.play('dialogue-open');
+        this.audio.playSfx('ui_select');
         const fullText = d.lines.map(l => l.text).join('\n');
         this.startTypewriter(fullText);
       } else {
@@ -321,17 +320,38 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
   }
 
   onChoiceHover(): void {
-    this.audio.play('choice-hover');
+    this.audio.playSfx('ui_select');
   }
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(e: KeyboardEvent): void {
     const d = this.dialogue();
-    if (!d || !this.isTypingComplete() || !d.choices.length) return;
-    const idx = digitIndex(e.key);
-    if (idx === null || idx >= d.choices.length) return;
-    e.preventDefault();
-    this.handleChoice(d.choices[idx]);
+    if (!d) return;
+
+    // Escape: safe exit (REGLA-004 — always reachable via keyboard)
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.close.emit();
+      return;
+    }
+
+    // Space or Enter: skip typewriter animation when still typing
+    if ((e.key === ' ' || e.key === 'Enter') && !this.isTypingComplete()) {
+      e.preventDefault();
+      this.skipTypewriter();
+      return;
+    }
+
+    if (!this.isTypingComplete()) return;
+
+    // Digit keys: select choice by number
+    if (d.choices.length) {
+      const idx = digitIndex(e.key);
+      if (idx !== null && idx < d.choices.length) {
+        e.preventDefault();
+        this.handleChoice(d.choices[idx]);
+      }
+    }
   }
 
   ngAfterViewChecked() {
@@ -347,7 +367,7 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
   }
 
   handleChoice(choice: DialogueChoiceState) {
-    this.audio.play(choice.isProhibited ? 'choice-error' : 'choice-select');
+    this.audio.playSfx(choice.isProhibited ? 'ui_cancel' : 'ui_confirm');
     if (choice.decisionOptionId != null) {
       this.execute.emit(choice.decisionOptionId);
     } else if (choice.requiredToolCode != null) {
