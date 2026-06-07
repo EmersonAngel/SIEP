@@ -34,7 +34,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         <!-- Text area -->
         <div class="strip-body">
           <p class="speaker-name">{{ d.speakerName }}</p>
-          <p class="dialogue-text" aria-live="polite">{{ displayedText() }}<span class="cursor" [class.cursor--done]="isTypingComplete()" aria-hidden="true">▋</span></p>
+          <p class="dialogue-text" role="status" aria-live="polite" aria-atomic="false">{{ displayedText() }}<span class="cursor" [class.cursor--done]="isTypingComplete()" aria-hidden="true">▋</span></p>
 
           @if (isTypingComplete() && d.choices.length) {
             <div class="choices" role="group" aria-label="Opciones de intervención">
@@ -327,6 +327,13 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
   onKeydown(e: KeyboardEvent): void {
     const d = this.dialogue();
     if (!d) return;
+
+    // Escape: safe exit (REGLA-004 — always reachable via keyboard)
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.close.emit();
+      return;
+    }
 
     // Space or Enter: skip typewriter animation when still typing
     if ((e.key === ' ' || e.key === 'Enter') && !this.isTypingComplete()) {
