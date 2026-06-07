@@ -113,12 +113,12 @@ import { AttemptOutcomeComponent } from './attempt-outcome.component';
         </header>
 
         @if (world(); as w) {
-          <app-game-world #gameWorld class="game-layer" [world]="w"
+          <app-game-world #gameWorld id="game-area" class="game-layer" [world]="w"
             [nearbyInteraction]="nearbyInteraction()" [selectedInteractionKey]="selectedInteraction()?.key ?? null"
             (proximity)="nearbyInteraction.set($event)" (interact)="openInteraction($event)"
             (positionChange)="rememberPosition($event.x, $event.y)" />
         } @else {
-          <div class="world-skeleton" aria-label="Cargando mapa"></div>
+          <div id="game-area" class="world-skeleton" aria-label="Cargando mapa"></div>
         }
 
         <app-simulation-hud class="hud-layer" [attempt]="game" [stressPulse]="stressPulse()"

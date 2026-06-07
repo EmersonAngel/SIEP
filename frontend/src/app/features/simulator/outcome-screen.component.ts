@@ -205,12 +205,20 @@ import { OutcomeTier, SimulationOutcome } from '../../core/models/simulation.mod
       color: rgba(79,163,165,.95);
     }
     .btn-retry:hover { background: rgba(79,163,165,.2); }
+    .btn-retry:focus-visible {
+      outline: 2px solid #C9B3FF;
+      outline-offset: 3px;
+    }
     .btn-exit {
       border-color: rgba(232,240,244,.2);
       background: transparent;
       color: rgba(232,240,244,.7);
     }
     .btn-exit:hover { background: rgba(255,255,255,.05); }
+    .btn-exit:focus-visible {
+      outline: 2px solid #C9B3FF;
+      outline-offset: 3px;
+    }
 
     @keyframes fade-in {
       from { opacity: 0; transform: scale(.96); }

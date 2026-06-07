@@ -18,9 +18,8 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         [class.strip--warning]="interaction()?.type === 'WARNING'"
         [class.strip--supervisory]="d.speakerName === 'Supervisión clínica'"
         role="dialog"
-        aria-modal="false"
-        [attr.aria-label]="d.speakerName + ': ' + fullText()"
-        aria-live="polite">
+        aria-modal="true"
+        [attr.aria-label]="d.speakerName + ': ' + fullText()">
 
         <div class="portrait" aria-hidden="true">
           <svg viewBox="0 0 48 48" class="portrait-svg" width="40" height="40">
@@ -327,11 +326,25 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   onKeydown(e: KeyboardEvent): void {
     const d = this.dialogue();
-    if (!d || !this.isTypingComplete() || !d.choices.length) return;
-    const idx = digitIndex(e.key);
-    if (idx === null || idx >= d.choices.length) return;
-    e.preventDefault();
-    this.handleChoice(d.choices[idx]);
+    if (!d) return;
+
+    // Space or Enter: skip typewriter animation when still typing
+    if ((e.key === ' ' || e.key === 'Enter') && !this.isTypingComplete()) {
+      e.preventDefault();
+      this.skipTypewriter();
+      return;
+    }
+
+    if (!this.isTypingComplete()) return;
+
+    // Digit keys: select choice by number
+    if (d.choices.length) {
+      const idx = digitIndex(e.key);
+      if (idx !== null && idx < d.choices.length) {
+        e.preventDefault();
+        this.handleChoice(d.choices[idx]);
+      }
+    }
   }
 
   ngAfterViewChecked() {

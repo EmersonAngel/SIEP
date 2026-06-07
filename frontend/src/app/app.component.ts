@@ -8,6 +8,7 @@ import { NotificationHostComponent } from './shared/notifications/notification-h
   imports: [RouterOutlet, NotificationHostComponent],
   template: `
     <a class="psy-skip-link" href="#main-content">Saltar al contenido principal</a>
+    <a class="psy-skip-link" href="#game-area">Saltar al juego</a>
     <app-notification-host />
     <router-outlet />
   `

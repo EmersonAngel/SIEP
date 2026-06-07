@@ -634,8 +634,9 @@ code, .psy-mono {
   border: 0 !important;
 }
 
-/** Skip link: visible on focus, hidden otherwise. */
-.psy-skip-link {
+/** Skip links: visible on focus, hidden otherwise. */
+.psy-skip-link,
+.skip-link {
   position: fixed;
   top: -100%;
   left: 50%;
@@ -651,22 +652,40 @@ code, .psy-mono {
   box-shadow: 0 8px 24px -8px rgba(36,50,58,.5);
   transition: top .2s ease;
 }
-.psy-skip-link:focus {
+.psy-skip-link:focus,
+.skip-link:focus {
   top: 16px;
   outline: 3px solid var(--psy-focus);
   outline-offset: 3px;
 }
 
-/** Focus indicator: high-contrast for keyboard users. */
+/** Focus indicator: high-contrast for keyboard users (light surfaces). */
 :focus-visible {
   outline: 3px solid var(--psy-focus);
   outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/**
+ * Game-mode focus rings: the simulator uses dark backgrounds (#0e1322).
+ * --psy-focus (rgba(0,72,118,.32)) is barely visible on dark bg.
+ * Override to use #C9B3FF (contrast ≥ 4.5:1 on #0e1322).
+ */
+body.game-mode :focus-visible {
+  outline: 2px solid #C9B3FF;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /** AA contrast fix: psy-muted is #687A86 on white bg = 4.03:1. Darkened to 4.5:1+. */
 .psy-aa-text {
   color: #566975;
 }
+
+/**
+ * Critical stress color: #E25A4F on #0e1322 = ~4.6:1 ✓ (passes AA).
+ * Keeping as-is. If used on lighter backgrounds, use #C0392B instead.
+ */
 
 /* ─── Game mode: fullscreen simulator — hides portal chrome ────────────────── */
 
