@@ -121,12 +121,33 @@ code, .psy-mono {
   background: rgba(79, 163, 165, .24);
 }
 
+/* ─── Icon font: Material Symbols Rounded ──────────────────────────────────── */
+/* Self-hosted (no CDN — works offline / on locked-down domains). Variable font
+   instanced down to the FILL axis only: opsz/wght/GRAD pinned, FILL 0→1 kept so
+   icons can be outlined (default) or filled. Source: assets/fonts/. */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block; /* never flash the raw ligature text ("play_arrow") */
+  src: url('/assets/fonts/material-symbols-rounded.woff2') format('woff2');
+}
+
+/* Both the Angular Material host (.mat-icon) and the bare utility class render
+   ligatures. font-family !important overrides the default Material Icons class
+   that MatIcon stamps on the host. Size comes from font-size; width/height use
+   1em so per-component font-size overrides scale the icon box too. */
+.mat-icon,
 .material-symbols-rounded {
-  font-family: inherit;
+  font-family: 'Material Symbols Rounded' !important;
   font-weight: normal;
   font-style: normal;
-  font-size: 0;
+  font-size: 24px;
   line-height: 1;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  overflow: hidden;
   letter-spacing: normal;
   text-transform: none;
   display: inline-block;
@@ -134,30 +155,18 @@ code, .psy-mono {
   word-wrap: normal;
   direction: ltr;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  font-variation-settings: 'FILL' 0;
 }
 
-.mat-icon {
-  display: inline-grid !important;
-  place-items: center;
-  flex-shrink: 0;
-  overflow: hidden;
-  font-family: inherit !important;
-  font-weight: 400;
-  font-style: normal;
-  font-size: 0 !important;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.mat-icon::before,
-.material-symbols-rounded::before {
-  content: '';
-  display: block;
-  width: clamp(8px, 58%, 18px);
-  height: clamp(8px, 58%, 18px);
-  border: 2px solid currentColor;
-  border-radius: 3px;
-  transform: rotate(45deg);
+/* Opt-in filled variant (e.g. solid hearts/markers in the mockups). */
+.mat-icon--filled,
+.material-symbols-rounded--filled,
+.material-symbols-rounded.filled {
+  font-variation-settings: 'FILL' 1;
 }
 
 .siep-notifications {
