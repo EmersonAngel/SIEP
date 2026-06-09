@@ -8,12 +8,12 @@ import { OutcomeTier, SimulationOutcome } from '../../core/models/simulation.mod
   imports: [CommonModule],
   template: `
     @if (outcome(); as o) {
-      <div class="outcome-overlay" role="dialog" aria-modal="true" aria-label="Resultado de la intervención">
+      <div class="outcome-overlay" role="dialog" aria-modal="true" aria-labelledby="outcome-title">
         <div class="outcome-card">
 
           <div class="outcome-header" [class]="'tier--' + o.tier">
             <span class="tier-icon" aria-hidden="true">{{ tierIcon(o.tier) }}</span>
-            <h2 class="tier-title">{{ tierLabel(o.tier) }}</h2>
+            <h2 id="outcome-title" class="tier-title">{{ tierLabel(o.tier) }}</h2>
             <p class="tier-sub">Resultado de tu intervención</p>
           </div>
 
@@ -205,12 +205,20 @@ import { OutcomeTier, SimulationOutcome } from '../../core/models/simulation.mod
       color: rgba(79,163,165,.95);
     }
     .btn-retry:hover { background: rgba(79,163,165,.2); }
+    .btn-retry:focus-visible {
+      outline: 2px solid #C9B3FF;
+      outline-offset: 3px;
+    }
     .btn-exit {
       border-color: rgba(232,240,244,.2);
       background: transparent;
       color: rgba(232,240,244,.7);
     }
     .btn-exit:hover { background: rgba(255,255,255,.05); }
+    .btn-exit:focus-visible {
+      outline: 2px solid #C9B3FF;
+      outline-offset: 3px;
+    }
 
     @keyframes fade-in {
       from { opacity: 0; transform: scale(.96); }

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -14,7 +14,7 @@ import { JournalPanelComponent, JournalSaveState } from './journal-panel.compone
 import { MinimapComponent, MinimapStage } from './minimap.component';
 import { SimulationHudComponent } from './simulation-hud.component';
 import { ToolInventoryComponent } from './tool-inventory.component';
-import { AudioService } from './audio.service';
+import { AudioDirectorService } from './audio-director.service';
 import {
   PROTOCOL_INFO_MESSAGE,
 } from './hospital-map.config';
@@ -113,12 +113,12 @@ import { AttemptOutcomeComponent } from './attempt-outcome.component';
         </header>
 
         @if (world(); as w) {
-          <app-game-world #gameWorld class="game-layer" [world]="w"
+          <app-game-world #gameWorld id="game-area" class="game-layer" [world]="w"
             [nearbyInteraction]="nearbyInteraction()" [selectedInteractionKey]="selectedInteraction()?.key ?? null"
             (proximity)="nearbyInteraction.set($event)" (interact)="openInteraction($event)"
             (positionChange)="rememberPosition($event.x, $event.y)" />
         } @else {
-          <div class="world-skeleton" aria-label="Cargando mapa"></div>
+          <div id="game-area" class="world-skeleton" aria-label="Cargando mapa"></div>
         }
 
         <app-simulation-hud class="hud-layer" [attempt]="game" [stressPulse]="stressPulse()"
@@ -735,10 +735,10 @@ import { AttemptOutcomeComponent } from './attempt-outcome.component';
     }
   `]
 })
-export class SimulationPlayComponent implements OnInit {
+export class SimulationPlayComponent implements OnInit, OnDestroy {
   private readonly simulationService = inject(SimulationService);
   private readonly route = inject(ActivatedRoute);
-  private readonly audio = inject(AudioService);
+  private readonly audioDirector = inject(AudioDirectorService);
 
   @ViewChild('gameWorld')    private gameWorld?: GameWorldComponent;
   @ViewChild('journalPanel') private journalPanel?: JournalPanelComponent;
@@ -782,6 +782,10 @@ export class SimulationPlayComponent implements OnInit {
 
   private lastPosition: { x: number; y: number } | null = null;
   private positionSaveHandle: number | null = null;
+
+  ngOnDestroy(): void {
+    this.audioDirector.dispose();
+  }
 
   ngOnInit() {
     const id = Number(this.route.snapshot.paramMap.get('caseVersionId'));
@@ -828,10 +832,12 @@ export class SimulationPlayComponent implements OnInit {
   }
 
   private bootstrapAttempt(attempt: SimulationAttemptState) {
+    this.audioDirector.init();
     this.attempt.set(attempt);
     this.persistAttemptToken(attempt);
     this.loadProgressMap(attempt);
     this.loadWorld(attempt);
+    this.audioDirector.setStressLevel(attempt.stressIndex);
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -1004,6 +1010,10 @@ export class SimulationPlayComponent implements OnInit {
           this.journalPanel?.clear();
           this.loadProgressMap(updated);
           this.loadWorld(updated);
+          this.audioDirector.setStressLevel(updated.stressIndex);
+          if (updated.status === 'COMPLETED') {
+            this.audioDirector.playResolution();
+          }
           if (updated.feedback) {
             window.setTimeout(() => this.dialogue.set(this.buildSupervisionDialogue(updated.feedback!)), 400);
           }
@@ -1022,7 +1032,11 @@ export class SimulationPlayComponent implements OnInit {
       next: (result: ToolUseResult) => {
         this.world.set(result.world);
         const cur = this.attempt();
-        if (cur) this.attempt.set({ ...cur, stressIndex: Math.max(0, Math.min(100, cur.stressIndex + result.stressDelta)) });
+        if (cur) {
+          const newStress = Math.max(0, Math.min(100, cur.stressIndex + result.stressDelta));
+          this.attempt.set({ ...cur, stressIndex: newStress });
+          this.audioDirector.setStressLevel(newStress);
+        }
         this.showToolFeedback(result);
         this.busy.set(false);
       },
@@ -1149,7 +1163,7 @@ export class SimulationPlayComponent implements OnInit {
   }
 
   private showToolFeedback(result: ToolUseResult): void {
-    this.audio.play('tool-use');
+    this.audioDirector.playSfx('ui_confirm');
     this.dialogue.set({
       key: `tool-feedback-${result.toolCode}-${Date.now()}`,
       speakerName: result.pertinent ? '✓ Herramienta pertinente' : 'ℹ Herramienta aplicada',
@@ -1190,7 +1204,7 @@ export class SimulationPlayComponent implements OnInit {
   }
 
   private triggerFade(callback: () => void): void {
-    this.audio.play('scene-transition');
+    this.audioDirector.playSfx('dialogue_advance');
     this.fadeActive.set(true);
     window.setTimeout(callback, 340);
   }

@@ -12,7 +12,12 @@ venv/
 
 # Env / secrets
 .env
+.env.*
+!.env.example
 *.local
+*.pem
+*.key
+secrets/
 
 # Logs / DB
 *.log
@@ -30,6 +35,11 @@ frontend/dist/
 frontend/.angular/
 frontend/qa-screenshots/
 frontend/.env
+frontend/src/environments/environment.prod.ts
+
+# Django local settings and media
+backend_django/psychosim/settings/local.py
+backend_django/media/
 
 # Docker / env
-*.env
+# (*.env ya está cubierto por `.env.*` en la sección "Env / secrets" arriba)

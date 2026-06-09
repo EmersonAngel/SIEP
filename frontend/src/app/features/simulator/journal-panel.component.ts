@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, effect, inject, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { AudioService } from './audio.service';
+import { AudioDirectorService } from './audio-director.service';
 
 export type JournalSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -151,14 +151,14 @@ export class JournalPanelComponent {
   readonly closeSheet = output<void>();
 
   text = '';
-  private readonly audio = inject(AudioService);
+  private readonly audio = inject(AudioDirectorService);
 
   constructor() {
-    effect(() => { if (this.open()) this.audio.play('journal-open'); });
+    effect(() => { if (this.open()) this.audio.playSfx('ui_select'); });
   }
 
   onCloseClick(): void {
-    this.audio.play('journal-close');
+    this.audio.playSfx('ui_cancel');
     this.closeSheet.emit();
   }
 
