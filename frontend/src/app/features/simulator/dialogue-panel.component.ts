@@ -22,7 +22,7 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
         aria-modal="true"
         [attr.aria-label]="d.speakerName + ': ' + fullText()">
 
-        <div class="portrait" aria-hidden="true">
+        <div class="portrait" aria-hidden="true" [style.color]="emotionColor(d.emotion)">
           <svg viewBox="0 0 48 48" class="portrait-svg" width="40" height="40">
             <circle cx="24" cy="18" r="9" fill="currentColor"/>
             <path d="M8 44 C8 33 15 28 24 28 C33 28 40 33 40 44 Z" fill="currentColor"/>
@@ -34,17 +34,24 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
 
         <!-- Text area -->
         <div class="strip-body">
-          <p class="speaker-name">{{ d.speakerName }}</p>
+          <p class="speaker-name">{{ d.speakerName }}
+            @if (emotionLabel(d.emotion); as em) {
+              <span class="emotion-tag" [style.color]="emotionColor(d.emotion)">{{ em }}</span>
+            }
+          </p>
           <p class="dialogue-text" role="status" aria-live="polite" aria-atomic="true">{{ displayedText() }}<span class="cursor" [class.cursor--done]="isTypingComplete()" aria-hidden="true">▋</span></p>
 
           @if (isTypingComplete() && d.choices.length) {
-            <div class="choices" role="group" aria-label="Opciones de intervención">
+            <div class="choices" role="group" aria-label="Opciones de intervención"
+              [class.choices--locked]="chosenKey() !== null">
               @for (choice of d.choices; track choice.key; let i = $index) {
                 <button
                   type="button"
                   class="choice-btn"
                   [class.choice-btn--recommended]="choice.isRecommended"
                   [class.choice-btn--prohibited]="choice.isProhibited"
+                  [class.choice-btn--chosen]="chosenKey() === choice.key"
+                  [style.--stagger]="i"
                   [attr.aria-label]="(i + 1) + '. ' + choice.text + (choice.isRecommended ? ' (recomendada)' : '') + (choice.isProhibited ? ' (contraindicada)' : '')"
                   (mouseenter)="onChoiceHover()"
                   (click)="handleChoice(choice)">
@@ -137,6 +144,9 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     }
     .speaker-name {
       margin: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
       font-size: .7rem;
       font-weight: 900;
       letter-spacing: .12em;
@@ -145,11 +155,20 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     }
     .strip--supervisory .speaker-name { color: #5d9278; }
     .strip--warning .speaker-name { color: #a85062; }
+    .emotion-tag {
+      font-size: .6rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: lowercase;
+      opacity: .75;
+    }
+    .emotion-tag::before { content: '· '; opacity: .6; }
 
     .dialogue-text {
       margin: 0;
       font-size: .97rem;
-      line-height: 1.6;
+      line-height: 1.65;
+      letter-spacing: .01em;
       color: rgba(232,240,244,.92);
       min-height: 1.6em;
       white-space: pre-line;
@@ -195,6 +214,28 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     .choice-btn:focus-visible {
       outline: 3px solid rgba(182,156,255,.5);
       outline-offset: 3px;
+    }
+    /* Entrada escalonada de opciones (sutil, una sola vez). */
+    .choice-btn {
+      animation: choice-in 200ms cubic-bezier(.2,.8,.2,1) both;
+      animation-delay: calc(var(--stagger, 0) * 45ms);
+    }
+    /* Confirmación: la card elegida se resalta y las demás ceden. */
+    .choices--locked .choice-btn { pointer-events: none; }
+    .choices--locked .choice-btn:not(.choice-btn--chosen) { opacity: .45; }
+    .choice-btn--chosen {
+      border-color: rgba(232,240,244,.85) !important;
+      background: rgba(124,77,255,.3);
+      animation: choice-confirm 170ms ease both;
+    }
+    @keyframes choice-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes choice-confirm {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(.985); }
+      100% { transform: scale(1); }
     }
     .choice-num {
       display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0;
@@ -317,6 +358,8 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
     @media (prefers-reduced-motion: reduce) {
       .dialogue-strip { animation: none; }
       .cursor { animation: none; }
+      .choice-btn, .choice-btn--chosen { animation: none; }
+      .choice-btn:hover { transform: none; }
     }
   `]
 })
@@ -335,8 +378,11 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
 
   readonly displayedText    = signal('');
   readonly isTypingComplete = signal(false);
+  /** Opción ya elegida: pausa breve de confirmación antes de ejecutar. */
+  readonly chosenKey = signal<string | null>(null);
 
   private typewriterHandle: ReturnType<typeof setInterval> | null = null;
+  private confirmHandle: ReturnType<typeof setTimeout> | null = null;
   private currentLineIndex = 0;
   private readonly audio = inject(AudioDirectorService);
 
@@ -345,6 +391,7 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
       const d = this.dialogue();
       this.stopTypewriter();
       this.currentLineIndex = 0;
+      this.chosenKey.set(null);
       if (d?.lines?.length) {
         this.audio.playSfx('ui_select');
         const fullText = d.lines.map(l => l.text).join('\n');
@@ -354,6 +401,26 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
         this.isTypingComplete.set(true);
       }
     });
+  }
+
+  /** Color del retrato/etiqueta según la emoción del hablante. */
+  emotionColor(emotion: string | null | undefined): string {
+    switch (emotion) {
+      case 'positive': return '#6EC67A';
+      case 'concerned': return '#F5B84B';
+      case 'danger': return '#E25A4F';
+      default: return '#B69CFF';
+    }
+  }
+
+  /** Estado emocional textual discreto (null = no se muestra). */
+  emotionLabel(emotion: string | null | undefined): string | null {
+    switch (emotion) {
+      case 'positive': return 'receptiva';
+      case 'concerned': return 'preocupada';
+      case 'danger': return 'alerta';
+      default: return null;
+    }
   }
 
   onChoiceHover(): void {
@@ -401,17 +468,24 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
 
   ngOnDestroy() {
     this.stopTypewriter();
+    if (this.confirmHandle !== null) clearTimeout(this.confirmHandle);
   }
 
   handleChoice(choice: DialogueChoiceState) {
+    if (this.chosenKey() !== null) return;   // ya hay una elección en curso
+    this.chosenKey.set(choice.key);
     this.audio.playSfx(choice.isProhibited ? 'ui_cancel' : 'ui_confirm');
-    if (choice.decisionOptionId != null) {
-      this.execute.emit(choice.decisionOptionId);
-    } else if (choice.requiredToolCode != null) {
-      this.useTool.emit(choice.requiredToolCode);
-    } else if (choice.key.startsWith('frontend:')) {
-      this.frontendChoice.emit(choice.key);
-    }
+    // Pausa breve de confirmación: la card elegida se resalta antes de ejecutar.
+    this.confirmHandle = setTimeout(() => {
+      this.confirmHandle = null;
+      if (choice.decisionOptionId != null) {
+        this.execute.emit(choice.decisionOptionId);
+      } else if (choice.requiredToolCode != null) {
+        this.useTool.emit(choice.requiredToolCode);
+      } else if (choice.key.startsWith('frontend:')) {
+        this.frontendChoice.emit(choice.key);
+      }
+    }, 170);
   }
 
   /** Skip typewriter animation — shows full text immediately. */

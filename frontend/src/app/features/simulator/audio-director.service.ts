@@ -26,7 +26,8 @@ export class AudioDirectorService {
   private sfx = new Map<SoundEffect, Howl>();
   private masterVolume = 1.0;
   private musicVolume = 0.7;
-  private sfxVolume = 0.8;
+  // Bajo a propósito: los SFX de UI acompañan, no protagonizan.
+  private sfxVolume = 0.5;
   private fadeInterval?: number;
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private initialized = false;

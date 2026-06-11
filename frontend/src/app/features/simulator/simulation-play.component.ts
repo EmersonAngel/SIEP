@@ -287,24 +287,39 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
       display: flex;
       gap: 8px;
       align-items: flex-start;
-      max-width: min(400px, 60%);
-      padding: 9px 12px;
-      border: 1px solid rgba(182,156,255,.3);
-      border-radius: 12px;
-      background: rgba(8,12,18,.86);
+      max-width: min(380px, 58%);
+      padding: 8px 11px;
+      border: 1px solid rgba(182,156,255,.32);
+      border-radius: 10px;
+      background: rgba(8,12,18,.88);
       backdrop-filter: blur(10px);
+      /* Marco doble: línea interna oscura — acabado pixel-art sobrio. */
+      box-shadow:
+        inset 0 0 0 1px rgba(8,12,18,.95),
+        0 12px 30px -22px rgba(124,77,255,.55);
     }
-    .objective-card mat-icon { color: var(--sim-lavender); font-size: 16px; width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; }
+    .objective-card mat-icon {
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      width: 22px; height: 22px;
+      margin-top: 1px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(182,156,255,.3);
+      background: rgba(124,77,255,.16);
+      color: var(--sim-lavender);
+    }
     .objective-card__body { display: grid; gap: 2px; min-width: 0; }
     .objective-card__body strong {
-      font-size: .64rem; font-weight: 900; letter-spacing: .1em;
+      font-size: .6rem; font-weight: 900; letter-spacing: .12em;
       text-transform: uppercase; color: #cdbcff;
     }
     .objective-card__body p { margin: 0; font-size: .76rem; line-height: 1.35; color: rgba(232,240,244,.85); }
     .objective-card__ethic {
-      color: #f0d9a8 !important;
-      font-size: .7rem !important;
-      border-top: 1px solid rgba(245,184,75,.25);
+      color: rgba(232,207,154,.85) !important;
+      font-size: .68rem !important;
+      border-top: 1px solid rgba(245,184,75,.18);
       padding-top: 4px;
       margin-top: 2px !important;
     }
@@ -376,6 +391,8 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
       transition: border-color 160ms, background 160ms;
     }
     .safe-exit:hover { border-color: rgba(226,90,79,.7); background: rgba(226,90,79,.18); }
+    .safe-exit:focus-visible { outline: 2px solid rgba(226,90,79,.6); outline-offset: 2px; }
+    .safe-exit:active { transform: translateY(1px); }
     .safe-exit:disabled { opacity: .4; cursor: not-allowed; }
     .safe-exit mat-icon { font-size: 19px; width: 19px; height: 19px; }
     .safe-exit__copy { display: grid; gap: 1px; text-align: left; }
@@ -836,6 +853,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
           this.audioDirector.setStressLevel(updated.stressIndex);
           if (updated.status === 'COMPLETED') {
             this.audioDirector.playResolution();
+            this.audioDirector.playSfx('session_complete');
           }
           if (updated.feedback) {
             window.setTimeout(() => this.dialogue.set(this.buildSupervisionDialogue(updated.feedback!)), 400);
@@ -870,6 +888,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   selectTool(toolCode: string) {
     const tool = this.world()?.tools.find(t => t.code === toolCode);
     if (!tool) return;
+    this.audioDirector.playSfx('ui_select');
     this.dialogue.set({
       key: tool.code, speakerName: 'Herramienta profesional', portraitKey: tool.icon, emotion: 'neutral',
       lines: [{ order: 1, speakerName: tool.label, text: tool.description, emotion: 'neutral' }], choices: []
@@ -925,6 +944,8 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   safeExit() {
     const game = this.attempt();
     if (!game || this.busy()) return;
+    // Sonido discreto: la salida segura es seria, no alarmista.
+    this.audioDirector.playSfx('ui_cancel');
     this.busy.set(true);
     this.simulationService.safeExit(game.attemptId, game.attemptToken, 'Salida segura solicitada').subscribe({
       next: updated => { this.attempt.set(updated); this.selectedInteraction.set(null); this.dialogue.set(null); this.loadWorld(updated); },

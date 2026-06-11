@@ -132,7 +132,13 @@ export type JournalSaveState = 'idle' | 'saving' | 'saved' | 'error';
       pointer-events: auto;
       transform: translate(-50%, -50%) scale(1);
     }
-    .sheet-header { display: flex; align-items: center; gap: 10px; }
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(182,156,255,.14);
+    }
     .sheet-header > mat-icon { color: #B69CFF; flex-shrink: 0; }
     .sheet-header__copy { flex: 1; min-width: 0; }
     .sheet-header h3 {

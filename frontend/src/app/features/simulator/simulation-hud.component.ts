@@ -118,9 +118,10 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-shell {
       display: flex;
       flex-direction: column;
-      background: rgba(8,12,18,.84);
+      background: linear-gradient(180deg, rgba(22,18,42,.9), rgba(8,12,18,.84));
       backdrop-filter: blur(18px) saturate(120%);
       border-bottom: 1px solid rgba(182,156,255,.2);
+      box-shadow: inset 0 -1px 0 rgba(8,12,18,.9);
       color: rgba(232,240,244,.9);
       transition: border-color var(--psy-motion-ui);
     }
@@ -199,7 +200,13 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-step mat-icon { color: rgba(157,192,232,.85); font-size: 14px; width: 14px; height: 14px; }
     .hud-step span { font-size: .68rem; font-weight: 700; color: rgba(157,192,232,.85); white-space: nowrap; }
 
-    .hud-actions { display: flex; align-items: center; gap: 6px; }
+    .hud-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-left: 12px;
+      border-left: 1px solid rgba(182,156,255,.16);
+    }
     .hud-action {
       display: grid;
       place-items: center;
@@ -213,7 +220,12 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
       text-decoration: none;
       transition: border-color 160ms, color 160ms, background 160ms;
     }
-    .hud-action:hover { border-color: rgba(182,156,255,.6); color: #B69CFF; }
+    .hud-action:hover { border-color: rgba(182,156,255,.6); color: #B69CFF; background: rgba(124,77,255,.1); }
+    .hud-action:focus-visible {
+      outline: 2px solid rgba(182,156,255,.7);
+      outline-offset: 2px;
+    }
+    .hud-action:active { transform: translateY(1px); }
     .hud-action--active { border-color: rgba(182,156,255,.8); color: #B69CFF; background: rgba(124,77,255,.18); }
     .hud-action mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
@@ -234,6 +246,7 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     }
     @media (prefers-reduced-motion: reduce) {
       .hud-stress--pulse { animation: none; }
+      .hud-action:active { transform: none; }
     }
   `]
 })

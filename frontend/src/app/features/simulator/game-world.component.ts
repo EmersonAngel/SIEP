@@ -35,6 +35,7 @@ import {
   authoredMarkerPosition,
   isAuthoredClinicalRoomKey,
 } from './authored-clinical-room.util';
+import { renderPremiumClinicalRoom } from './premium-clinical-room.renderer';
 import {
   AVATAR_ANIM_KEYS,
   AVATAR_DISPLAY_SCALE,
@@ -104,6 +105,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
   private selectedKey: string | null = null;
   private ready = false;
   private assetsLoaded = false;
+  private firstSceneFadeDone = false;
   private stepTimer = 0;
   private readonly STEP_INTERVAL = 280; // ms — natural walking cadence (~215 steps/min)
   private interactionCooldown = 0;
@@ -604,6 +606,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.updateNearestInteraction(true); // suppress blip on initial spawn
     this.buildGuide();
     this.applyLightingOverlay();
+    this.playIntroFade();
   }
 
   /**
@@ -680,21 +683,27 @@ class DataDrivenWorldScene extends Phaser.Scene {
     cam.setZoom(authoredClinicalRoom ? 1 : 2);
     cam.setBounds(0, 0, actualMapW, actualMapH);
 
-    // ── Dark procedural floor + subtle grid (mirrors renderWorld style) ───────
-    // Floor tile layer uses GID 0 (transparent) everywhere, so this dark rect IS the floor.
-    this.add.rectangle(actualMapW / 2, actualMapH / 2, actualMapW - 40, actualMapH - 42, 0x131c28, 1).setDepth(0);
-    const gfx = this.add.graphics().setDepth(1);
-    gfx.lineStyle(1, 0x1c2d3e, 0.55);
-    for (let gx = 16; gx < actualMapW; gx += 32) gfx.lineBetween(gx, 0, gx, actualMapH);
-    for (let gy = 16; gy < actualMapH; gy += 32) gfx.lineBetween(0, gy, actualMapW, gy);
     if (authoredClinicalRoom) {
-      this.renderAuthoredClinicalOffice(actualMapW, actualMapH);
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+      // Sala premium: el renderer pinta TODAS las capas visuales (background,
+      // floor, props, lighting). Sin grilla genérica ni borde de editor.
+      renderPremiumClinicalRoom(this, {
+        width: actualMapW,
+        height: actualMapH,
+        reduceMotion: this.callbacks.reduceMotion,
+      });
+    } else {
+      // ── Dark procedural floor + subtle grid (mirrors renderWorld style) ─────
+      // Floor tile layer uses GID 0 (transparent) everywhere, so this dark rect IS the floor.
+      this.add.rectangle(actualMapW / 2, actualMapH / 2, actualMapW - 40, actualMapH - 42, 0x131c28, 1).setDepth(0);
+      const gfx = this.add.graphics().setDepth(1);
+      gfx.lineStyle(1, 0x1c2d3e, 0.55);
+      for (let gx = 16; gx < actualMapW; gx += 32) gfx.lineBetween(gx, 0, gx, actualMapH);
+      for (let gy = 16; gy < actualMapH; gy += 32) gfx.lineBetween(0, gy, actualMapW, gy);
 
-    // Room border
-    this.add.rectangle(actualMapW / 2, actualMapH / 2, actualMapW - 36, actualMapH - 38)
-      .setStrokeStyle(3, 0x4f7cac, .3).setFillStyle(0x000000, 0).setDepth(5);
+      // Room border
+      this.add.rectangle(actualMapW / 2, actualMapH / 2, actualMapW - 36, actualMapH - 38)
+        .setStrokeStyle(3, 0x4f7cac, .3).setFillStyle(0x000000, 0).setDepth(5);
+    }
 
     // Backend interactive objects (markers) — merge Tiled Objects-layer positions
     // (Tiled object "name" must match the backend MapObjectState "key").
@@ -726,6 +735,14 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.updateNearestInteraction(true);
     this.buildGuide();
     this.applyLightingOverlay();
+    this.playIntroFade();
+  }
+
+  /** Fade-in breve al entrar a la simulación (solo la primera escena). */
+  private playIntroFade(): void {
+    if (this.firstSceneFadeDone) return;
+    this.firstSceneFadeDone = true;
+    if (!this.callbacks.reduceMotion) this.cameras.main.fadeIn(300, 7, 10, 20);
   }
 
   private positionAuthoredClinicalNpcs(npcs: NpcConfig[]): NpcConfig[] {
@@ -733,176 +750,6 @@ class DataDrivenWorldScene extends Phaser.Scene {
       const pos = AUTHORED_NPC_POSITIONS[index] ?? AUTHORED_NPC_POSITIONS[AUTHORED_NPC_POSITIONS.length - 1];
       return { ...npc, x: pos.x, y: pos.y };
     });
-  }
-
-  private renderAuthoredClinicalOffice(mapW: number, mapH: number): void {
-    const roomLeft = 58;
-    const roomRight = mapW - 58;
-    const backY = 76;
-    const wallBottomY = 220;
-    const floorBottomY = mapH - 38;
-
-    this.add.rectangle(mapW / 2, mapH / 2, mapW, mapH, 0x0c111d, 1).setDepth(0);
-
-    const shell = this.add.graphics().setDepth(DEPTH.BACKGROUND);
-    shell.fillStyle(0x24203b, 1);
-    shell.fillRect(roomLeft, backY, roomRight - roomLeft, wallBottomY - backY);
-    shell.fillStyle(0x31294a, 1);
-    shell.fillTriangle(roomLeft, backY, roomLeft, floorBottomY, 144, wallBottomY);
-    shell.fillTriangle(roomRight, backY, roomRight, floorBottomY, mapW - 144, wallBottomY);
-    shell.fillStyle(0x5b5279, 1);
-    shell.beginPath();
-    shell.moveTo(144, wallBottomY);
-    shell.lineTo(mapW - 144, wallBottomY);
-    shell.lineTo(roomRight - 26, floorBottomY);
-    shell.lineTo(roomLeft + 26, floorBottomY);
-    shell.closePath();
-    shell.fillPath();
-
-    const grid = this.add.graphics().setDepth(DEPTH.GRID);
-    grid.lineStyle(1, 0x877fb0, 0.22);
-    for (let x = 160; x <= mapW - 160; x += 48) {
-      grid.lineBetween(x, wallBottomY, x - 58, floorBottomY);
-      grid.lineBetween(x, wallBottomY, x + 58, floorBottomY);
-    }
-    for (let y = wallBottomY + 28; y < floorBottomY; y += 36) {
-      grid.lineBetween(roomLeft + 42, y, roomRight - 42, y);
-    }
-
-    // Zócalo en la unión pared/piso: una arista nítida refuerza la lectura
-    // 2.5D (fondo vs. suelo) más que cualquier textura.
-    const baseboard = this.add.graphics().setDepth(DEPTH.BACKGROUND + 1);
-    baseboard.lineStyle(4, 0x16121f, 0.95);
-    baseboard.lineBetween(144, wallBottomY, mapW - 144, wallBottomY);
-    baseboard.lineStyle(3, 0x16121f, 0.8);
-    baseboard.lineBetween(roomLeft + 26, floorBottomY, 144, wallBottomY);
-    baseboard.lineBetween(roomRight - 26, floorBottomY, mapW - 144, wallBottomY);
-    baseboard.lineStyle(1, 0x6f6396, 0.5);
-    baseboard.lineBetween(144, wallBottomY + 3, mapW - 144, wallBottomY + 3);
-
-    // Texto ambiental discreto: decorativo, no debe competir con el gameplay.
-    this.add.rectangle(mapW / 2, wallBottomY - 70, 270, 28, 0x1a2034, 0.6)
-      .setStrokeStyle(1, 0x8a6cff, 0.18)
-      .setDepth(DEPTH.ENVIRONMENT);
-    this.add.text(mapW / 2, wallBottomY - 76, 'ESCUCHAR  ACOMPANAR  PROTEGER', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#9d8fd0',
-      align: 'center',
-    }).setOrigin(0.5, 0).setAlpha(0.8).setDepth(DEPTH.ENVIRONMENT + 1);
-
-    this.drawOfficeWindow(150, 114);
-    this.drawBookshelf(760, 178, 'right');
-    this.drawBookshelf(178, 182, 'left');
-    this.drawPlant(820, 382, 1.15);
-    this.drawPlant(116, 392, 1.2);
-    this.drawSofa(190, 322);
-    this.drawCoffeeTable(300, 374);
-    this.drawDesk(500, 286);
-    this.drawPoster(682, 116);
-
-    const shade = this.add.graphics().setDepth(DEPTH.LIGHTING - 2).setScrollFactor(0);
-    shade.fillStyle(0x0b1020, 0.14);
-    shade.fillRect(0, 0, mapW, mapH);
-    // Luz cálida sutil sobre el área de atención — no debe lavar el gameplay.
-    const lamp = this.add.graphics().setDepth(DEPTH.LIGHTING - 1);
-    lamp.fillStyle(0xffd987, 0.07);
-    lamp.fillEllipse(mapW / 2, 190, 360, 170);
-  }
-
-  private drawDesk(x: number, y: number): void {
-    // 250/270 px de ancho (antes 290/310): el escritorio acompaña la escena sin
-    // dominarla. La colisión vive en AUTHORED_CLINICAL_COLLISIONS — mantener en sync.
-    this.drawFloorShadow(x, y + 54, 290, 26);
-    this.add.rectangle(x, y, 250, 34, 0x8a5534, 1)
-      .setStrokeStyle(2, 0x352118, 0.85)
-      .setDepth(actorDepth(y));
-    this.add.rectangle(x, y + 28, 270, 46, 0x6f432c, 1)
-      .setStrokeStyle(2, 0x352118, 0.85)
-      .setDepth(actorDepth(y + 28));
-    this.add.rectangle(x - 78, y + 30, 54, 32, 0x5a3525, 1).setDepth(actorDepth(y + 30));
-    this.add.rectangle(x + 78, y + 30, 54, 32, 0x5a3525, 1).setDepth(actorDepth(y + 30));
-    this.add.rectangle(x - 66, y - 30, 44, 34, 0x161b28, 1)
-      .setStrokeStyle(2, 0x31384a, 1)
-      .setDepth(actorDepth(y - 12));
-    this.add.rectangle(x - 66, y - 7, 60, 10, 0x101521, 1).setDepth(actorDepth(y - 7));
-    this.add.rectangle(x + 54, y - 20, 38, 26, 0xd8d4c7, 1)
-      .setStrokeStyle(1, 0x51412e, 0.8)
-      .setDepth(actorDepth(y - 8));
-    this.drawPlant(x + 14, y - 18, 0.55);
-  }
-
-  /** Sombra elíptica de contacto sobre el piso, bajo un mueble. */
-  private drawFloorShadow(x: number, y: number, w: number, h: number): void {
-    this.add.ellipse(x, y, w, h, 0x05070d, 0.3).setDepth(actorDepth(y) - 40);
-  }
-
-  private drawSofa(x: number, y: number): void {
-    this.drawFloorShadow(x, y + 34, 168, 22);
-    this.add.rectangle(x, y, 150, 54, 0x244772, 1)
-      .setStrokeStyle(2, 0x12253d, 0.9)
-      .setDepth(actorDepth(y));
-    this.add.rectangle(x - 58, y, 22, 68, 0x1c3658, 1).setDepth(actorDepth(y + 1));
-    this.add.rectangle(x + 58, y, 22, 68, 0x1c3658, 1).setDepth(actorDepth(y + 1));
-    this.add.line(x, y - 2, -52, 0, 52, 0, 0x6f88aa, 0.45).setDepth(actorDepth(y + 2));
-  }
-
-  private drawCoffeeTable(x: number, y: number): void {
-    this.drawFloorShadow(x, y + 24, 102, 18);
-    this.add.rectangle(x, y, 92, 42, 0x6a442c, 1)
-      .setStrokeStyle(2, 0x332116, 0.85)
-      .setDepth(actorDepth(y));
-    this.add.rectangle(x, y - 4, 46, 22, 0x352e32, 0.72).setDepth(actorDepth(y + 1));
-  }
-
-  private drawBookshelf(x: number, y: number, side: 'left' | 'right'): void {
-    const w = side === 'left' ? 112 : 130;
-    this.add.rectangle(x, y, w, 92, 0x6b442b, 1)
-      .setStrokeStyle(2, 0x301c13, 0.9)
-      .setDepth(DEPTH.ENVIRONMENT);
-    for (let row = 0; row < 2; row++) {
-      this.add.rectangle(x, y - 24 + row * 34, w - 16, 4, 0x2c1c13, 1).setDepth(DEPTH.ENVIRONMENT + 1);
-      for (let i = 0; i < 6; i++) {
-        const bx = x - w / 2 + 18 + i * 15;
-        const color = [0x7f3f3f, 0x2f6f6f, 0xa87934, 0x3f5f92][(i + row) % 4];
-        this.add.rectangle(bx, y - 42 + row * 34, 8, 24, color, 1).setDepth(DEPTH.ENVIRONMENT + 2);
-      }
-    }
-  }
-
-  private drawOfficeWindow(x: number, y: number): void {
-    this.add.rectangle(x, y, 138, 70, 0xe7c98b, 0.85)
-      .setStrokeStyle(3, 0x31213a, 0.9)
-      .setDepth(DEPTH.ENVIRONMENT);
-    for (let i = 0; i < 5; i++) {
-      this.add.rectangle(x, y - 26 + i * 13, 130, 5, 0xffe0a1, 0.55).setDepth(DEPTH.ENVIRONMENT + 1);
-    }
-  }
-
-  private drawPoster(x: number, y: number): void {
-    this.add.rectangle(x, y, 86, 78, 0xd8c5a5, 1)
-      .setStrokeStyle(2, 0x4b3527, 0.9)
-      .setDepth(DEPTH.ENVIRONMENT);
-    this.add.text(x, y - 21, 'CUIDAR\nTAMBIEN\nES PREVENIR', {
-      fontFamily: 'monospace',
-      fontSize: '8px',
-      color: '#5d3a55',
-      align: 'center',
-    }).setOrigin(0.5).setDepth(DEPTH.ENVIRONMENT + 1);
-  }
-
-  private drawPlant(x: number, y: number, scale: number): void {
-    const depth = actorDepth(y);
-    if (scale >= 1) this.drawFloorShadow(x, y + 30 * scale, 44 * scale, 12 * scale);
-    this.add.rectangle(x, y + 18 * scale, 26 * scale, 24 * scale, 0x323847, 1)
-      .setStrokeStyle(1, 0x111724, 0.9)
-      .setDepth(depth);
-    const g = this.add.graphics().setDepth(depth + 1);
-    g.fillStyle(0x3d7a42, 1);
-    for (let i = 0; i < 7; i++) {
-      const angle = (-70 + i * 23) * Math.PI / 180;
-      g.fillEllipse(x + Math.cos(angle) * 12 * scale, y + Math.sin(angle) * 15 * scale, 14 * scale, 32 * scale);
-    }
   }
 
   private checkExitTriggers() {
@@ -948,12 +795,23 @@ class DataDrivenWorldScene extends Phaser.Scene {
     // En la sala autoría los muebles son grandes: los NPCs suben de escala para
     // mantener proporción con el avatar modular (~38×58 px).
     const npcScale = this.authoredRoomActive ? 2.4 : 1.5;
+    // Sombra de contacto en dos pasos, proporcional a la escala del sprite:
+    // asienta al NPC en el piso (no debe verse como sticker pegado).
+    const shY = this.authoredRoomActive ? 19 : 12;
+    const shW = this.authoredRoomActive ? 32 : 20;
     for (const npc of npcs) {
-      const shadow = this.add.ellipse(0, 12, 14, 4, 0x000000, .18);
+      const shadowSoft = this.add.ellipse(0, shY, shW, shW * 0.3, 0x000000, .14);
+      const shadow = this.add.ellipse(0, shY, shW * 0.66, shW * 0.2, 0x000000, .24);
 
       let sprite: Phaser.GameObjects.GameObject;
       if (this.assetsLoaded && this.textures.exists('characters')) {
-        sprite = this.add.sprite(0, 0, 'characters', npc.frameIndex).setScale(npcScale);
+        const npcSprite = this.add.sprite(0, 0, 'characters', npc.frameIndex).setScale(npcScale);
+        // Lavado lavanda muy sutil: unifica los Kenney con la paleta de la sala
+        // premium. Los paciente-* quedan libres para el tint de estado clínico.
+        if (this.authoredRoomActive && !npc.key.startsWith('paciente-')) {
+          npcSprite.setTint(0xe9e2f6);
+        }
+        sprite = npcSprite;
       } else {
         sprite = this.add.circle(0, -8, 10, 0x4fa3a5, 1);
       }
@@ -969,7 +827,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
         fontFamily: 'Arial, sans-serif', fontSize: '8px', color: '#4fa3a5', align: 'center',
       }).setOrigin(0.5, 1).setAlpha(0);
 
-      const container = this.add.container(npc.x, npc.y, [shadow, sprite, label, hint]).setDepth(actorDepth(npc.y));
+      const container = this.add.container(npc.x, npc.y, [shadowSoft, shadow, sprite, label, hint]).setDepth(actorDepth(npc.y));
       this.npcMarkers.set(npc.key, container);
       (container as unknown as Record<string, unknown>)['__npcConfig'] = npc;
       (container as unknown as Record<string, unknown>)['__hintSprite'] = hint;
@@ -1201,9 +1059,10 @@ class DataDrivenWorldScene extends Phaser.Scene {
     const w = cam.width, h = cam.height;
     const g = this.add.graphics().setScrollFactor(0).setDepth(DEPTH.LIGHTING);
     // Borde oscuro suave en los 4 lados — viñeta barata sin shaders.
-    const band = Math.round(Math.min(w, h) * 0.18);
+    // Banda corta y alpha bajo: enmarca sin leerse como overlay técnico.
+    const band = Math.round(Math.min(w, h) * 0.12);
     for (let i = 0; i < band; i++) {
-      const a = 0.45 * (1 - i / band) ** 2;
+      const a = 0.3 * (1 - i / band) ** 2;
       g.lineStyle(1, tint, a);
       g.strokeRect(i, i, w - i * 2, h - i * 2);
     }
@@ -1231,11 +1090,13 @@ class DataDrivenWorldScene extends Phaser.Scene {
     if (this.avatarReady && this.textures.exists(AVATAR_TEXTURE_KEY)) {
       // Avatar modular del editor de personaje (frame 64×96 × AVATAR_DISPLAY_SCALE).
       // El centro del sprite sube para que los pies caigan sobre la sombra (y≈22),
-      // que es también la base del hitbox de colisión.
-      const shadow = this.add.ellipse(0, 22, 32, 10, 0x000000, .25);
+      // que es también la base del hitbox de colisión. Sombra en dos pasos:
+      // borde suave + núcleo — contraste con el piso sin parecer sticker.
+      const shadowSoft = this.add.ellipse(0, 22, 42, 13, 0x000000, .15);
+      const shadow = this.add.ellipse(0, 22, 28, 9, 0x000000, .27);
       const sprite = this.add.sprite(0, -14, AVATAR_TEXTURE_KEY, AVATAR_IDLE_FRAMES.down)
         .setScale(AVATAR_DISPLAY_SCALE);
-      this.player = this.add.container(x, y, [shadow, sprite]).setDepth(actorDepth(y));
+      this.player = this.add.container(x, y, [shadowSoft, shadow, sprite]).setDepth(actorDepth(y));
       this.playerSprite = sprite;
       return;
     }
@@ -1328,7 +1189,9 @@ class DataDrivenWorldScene extends Phaser.Scene {
       this.tweens.add({ targets: pulse, scale: 1.3, alpha: .05, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
-    const marker = this.add.container(object.x, object.y, [pulse, main, label]).setDepth(actorDepth(object.y));
+    // Sombra de contacto: el icono queda asentado en el piso, no flotando.
+    const markerShadow = this.add.ellipse(0, 16, 26, 8, 0x000000, .2);
+    const marker = this.add.container(object.x, object.y, [markerShadow, pulse, main, label]).setDepth(actorDepth(object.y));
     this.markers.set(object.key, marker);
     this.markerData.set(object.key, object);
     if (!isExit) this.markerLabels.set(object.key, label);
