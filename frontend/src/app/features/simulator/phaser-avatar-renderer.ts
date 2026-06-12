@@ -90,17 +90,37 @@ export function avatarFrameRects(): Array<{ index: number; x: number; y: number;
   return rects;
 }
 
+/** Clave de textura compuesta de un preset de NPC (no pisa la del jugador). */
+export function npcAvatarTextureKey(presetKey: string): string {
+  return `npc-avatar-${presetKey}`;
+}
+
+export interface AvatarAnimKeySet { down: string; side: string; up: string; }
+
+/** Claves de animación de caminata por preset de NPC. */
+export function npcAvatarAnimKeys(presetKey: string): AvatarAnimKeySet {
+  return {
+    down: `npc-${presetKey}-walk-down`,
+    side: `npc-${presetKey}-walk-side`,
+    up: `npc-${presetKey}-walk-up`,
+  };
+}
+
 /**
- * Compone las capas (ya cargadas como imágenes) en un CanvasTexture y registra
- * los 9 frames. Devuelve false si ninguna capa está disponible (el llamador
- * usa el fallback Kenney).
+ * Compone capas (ya cargadas como imágenes) en un CanvasTexture con la clave
+ * dada (jugador o NPC) y registra los 9 frames. Devuelve false si ninguna capa
+ * está disponible (el llamador usa el fallback Kenney).
  */
-export function composeAvatarTexture(scene: Phaser.Scene, specs: AvatarLayerSpec[]): boolean {
+export function composeAvatarTextureAs(
+  scene: Phaser.Scene,
+  textureKey: string,
+  specs: AvatarLayerSpec[],
+): boolean {
   const available = specs.filter(spec => scene.textures.exists(spec.textureKey));
   if (!available.length) return false;
 
-  if (scene.textures.exists(AVATAR_TEXTURE_KEY)) scene.textures.remove(AVATAR_TEXTURE_KEY);
-  const canvasTexture = scene.textures.createCanvas(AVATAR_TEXTURE_KEY, AVATAR_SHEET_WIDTH, AVATAR_SHEET_HEIGHT);
+  if (scene.textures.exists(textureKey)) scene.textures.remove(textureKey);
+  const canvasTexture = scene.textures.createCanvas(textureKey, AVATAR_SHEET_WIDTH, AVATAR_SHEET_HEIGHT);
   if (!canvasTexture) return false;
 
   const ctx = canvasTexture.getContext();
@@ -127,16 +147,30 @@ export function composeAvatarTexture(scene: Phaser.Scene, specs: AvatarLayerSpec
   return true;
 }
 
-/** (Re)crea las animaciones de caminata del avatar compuesto. */
-export function createAvatarAnimations(scene: Phaser.Scene): void {
+/** Composición del avatar del JUGADOR (firma estable de la fase 4 del MVP). */
+export function composeAvatarTexture(scene: Phaser.Scene, specs: AvatarLayerSpec[]): boolean {
+  return composeAvatarTextureAs(scene, AVATAR_TEXTURE_KEY, specs);
+}
+
+/** (Re)crea animaciones de caminata para una textura compuesta con claves dadas. */
+export function createAvatarAnimationsFor(
+  scene: Phaser.Scene,
+  textureKey: string,
+  animKeys: AvatarAnimKeySet,
+): void {
   for (const dir of ['down', 'side', 'up'] as const) {
-    const key = AVATAR_ANIM_KEYS[dir];
+    const key = animKeys[dir];
     if (scene.anims.exists(key)) scene.anims.remove(key);
     scene.anims.create({
       key,
-      frames: AVATAR_WALK_FRAMES[dir].map(frame => ({ key: AVATAR_TEXTURE_KEY, frame })),
+      frames: AVATAR_WALK_FRAMES[dir].map(frame => ({ key: textureKey, frame })),
       frameRate: 7,
       repeat: -1,
     });
   }
+}
+
+/** (Re)crea las animaciones de caminata del avatar compuesto del jugador. */
+export function createAvatarAnimations(scene: Phaser.Scene): void {
+  createAvatarAnimationsFor(scene, AVATAR_TEXTURE_KEY, AVATAR_ANIM_KEYS);
 }

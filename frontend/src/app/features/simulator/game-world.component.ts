@@ -49,15 +49,26 @@ import {
 import {
   AVATAR_ANIM_KEYS,
   AVATAR_DISPLAY_SCALE,
+  AVATAR_FRAME_HEIGHT,
   AVATAR_IDLE_FRAMES,
   AVATAR_TEXTURE_KEY,
   AvatarLayerSpec,
   avatarLayerSpecs,
   composeAvatarTexture,
+  composeAvatarTextureAs,
   createAvatarAnimations,
+  createAvatarAnimationsFor,
+  npcAvatarAnimKeys,
+  npcAvatarTextureKey,
 } from './phaser-avatar-renderer';
+import {
+  MAP_OBJECT_PRESETS,
+  NPC_PRESET_RENDER,
+  npcPresetConfig,
+} from './npc-avatar-presets';
 import { parseAvatar } from '../character/avatar-config.util';
 import { AVATAR_STORAGE_KEY } from '../character/avatar.store';
+import { NpcAvatarPresetKey } from '../../core/models/simulation.model';
 
 interface WorldCallbacks {
   onProximity:   (obj: MapObjectState | null) => void;
@@ -83,6 +94,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
   private playerSprite?: Phaser.GameObjects.Sprite;
   private avatarSpecs: AvatarLayerSpec[] = [];
   private avatarReady = false;
+  private readonly npcCompositesReady = new Set<string>();
   private lastDirection: PlayerDirection = 'down';
   /** Última pose aplicada — la animación solo cambia si dirección/caminar cambió. */
   private lastPose: { direction: PlayerDirection | null; walking: boolean } = { direction: null, walking: false };
@@ -158,6 +170,16 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.avatarSpecs = avatarLayerSpecs(avatarConfig);
     for (const spec of this.avatarSpecs) {
       this.load.image(spec.textureKey, spec.assetPath);
+    }
+
+    // ── Capas modulares de los presets de NPC (mismas hojas que el avatar;
+    //    claves idénticas se deduplican solas en el loader) ──────────────────
+    for (const presetKey of Object.keys(NPC_PRESET_RENDER)) {
+      const presetConfig = npcPresetConfig(presetKey);
+      if (!presetConfig) continue;
+      for (const spec of avatarLayerSpecs(presetConfig)) {
+        this.load.image(spec.textureKey, spec.assetPath);
+      }
     }
 
     // Tiled JSON maps — all known scenario keys (missing ones fail silently)
@@ -861,15 +883,83 @@ class DataDrivenWorldScene extends Phaser.Scene {
     if (!onDoor) this.dbDoorArmed = true;
   }
 
+  /** Compone (una vez) textura+anims del preset modular. false → fallback Kenney. */
+  private ensureNpcComposite(presetKey: NpcAvatarPresetKey): boolean {
+    if (this.npcCompositesReady.has(presetKey)) return true;
+    const config = npcPresetConfig(presetKey);
+    if (!config) return false;
+    const ok = composeAvatarTextureAs(this, npcAvatarTextureKey(presetKey), avatarLayerSpecs(config));
+    if (!ok) return false;
+    createAvatarAnimationsFor(this, npcAvatarTextureKey(presetKey), npcAvatarAnimKeys(presetKey));
+    this.npcCompositesReady.add(presetKey);
+    return true;
+  }
+
+  /** Frame de reposo del NPC modular según dirección (la fila lateral mira a la IZQUIERDA). */
+  private applyNpcFacing(container: Phaser.GameObjects.Container, direction: 'down' | 'up' | 'left' | 'right'): void {
+    const sprite = (container as unknown as Record<string, unknown>)['__npcSprite'] as Phaser.GameObjects.Sprite | undefined;
+    if (!sprite) return;
+    sprite.stop();
+    const frame = direction === 'up' ? AVATAR_IDLE_FRAMES.up
+      : direction === 'down' ? AVATAR_IDLE_FRAMES.down
+      : AVATAR_IDLE_FRAMES.side;
+    sprite.setFrame(frame);
+    sprite.setFlipX(direction === 'right');
+  }
+
   private spawnNpcs(npcs: NpcConfig[]) {
-    // En la sala autoría los muebles son grandes: los NPCs suben de escala para
-    // mantener proporción con el avatar modular (~38×58 px).
+    // En la sala autoría los muebles son grandes: los NPCs Kenney legacy suben
+    // de escala para mantener proporción con el avatar modular (~38×58 px).
     const npcScale = this.authoredRoomActive ? 2.4 : 1.5;
     // Sombra de contacto en dos pasos, proporcional a la escala del sprite:
     // asienta al NPC en el piso (no debe verse como sticker pegado).
     const shY = this.authoredRoomActive ? 19 : 12;
     const shW = this.authoredRoomActive ? 32 : 20;
     for (const npc of npcs) {
+      // Red de seguridad: si la coord del JSON cae en colisión, buscar piso libre.
+      const pos = this.wouldCollide(npc.x, npc.y)
+        ? freeTileNear({ x: npc.x, y: npc.y }, (x, y) => this.wouldCollide(x, y), 18, 3)
+        : { x: npc.x, y: npc.y };
+
+      // ── Rama modular: mismo universo visual que el avatar del jugador ──────
+      const presetKey = npc.avatarPresetKey;
+      if (presetKey && this.assetsLoaded && this.ensureNpcComposite(presetKey)) {
+        const render = NPC_PRESET_RENDER[presetKey];
+        const scale = npc.scale ?? render.scale;
+        // Contrato de pies: (x,y) del contenedor = pies; el frame trae los pies
+        // en y≈90 ⇒ centro del sprite a -42*scale (mismo cálculo que el jugador).
+        const spriteOffsetY = -Math.round(42 * scale);
+        const shadowSoft = this.add.ellipse(0, 0, 42 * scale, 13 * scale, 0x000000, .15);
+        const shadow = this.add.ellipse(0, 0, 28 * scale, 9 * scale, 0x000000, .27);
+        const npcSprite = this.add.sprite(0, spriteOffsetY, npcAvatarTextureKey(presetKey), AVATAR_IDLE_FRAMES.down)
+          .setScale(scale);
+        const baseTint = render.tint ?? null;
+        if (baseTint != null) npcSprite.setTint(baseTint);
+
+        const headY = spriteOffsetY - Math.round((AVATAR_FRAME_HEIGHT / 2) * scale);
+        const label = this.add.text(0, headY - 4, npc.displayName, {
+          fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#e8f0f4',
+          backgroundColor: 'rgba(8,12,18,.72)', padding: { x: 3, y: 2 }, align: 'center',
+        }).setOrigin(0.5, 1).setAlpha(0);
+        const hint = this.add.text(0, headY - 18, '▲ E', {
+          fontFamily: 'Arial, sans-serif', fontSize: '8px', color: '#4fa3a5', align: 'center',
+        }).setOrigin(0.5, 1).setAlpha(0);
+
+        const container = this.add.container(pos.x, pos.y, [shadowSoft, shadow, npcSprite, label, hint]);
+        this.setFeetOffset(container, 0);   // pies = origen del contenedor
+        this.npcMarkers.set(npc.key, container);
+        const bag = container as unknown as Record<string, unknown>;
+        bag['__npcConfig'] = npc;
+        bag['__hintSprite'] = hint;
+        bag['__labelSprite'] = label;
+        bag['__npcSprite'] = npcSprite;
+        bag['__npcPreset'] = presetKey;
+        bag['__npcBaseTint'] = baseTint;
+        this.applyNpcFacing(container, npc.facing ?? 'down');
+        continue;
+      }
+
+      // ── Fallback legacy Kenney (sin preset o assets ausentes) ──────────────
       const shadowSoft = this.add.ellipse(0, shY, shW, shW * 0.3, 0x000000, .14);
       const shadow = this.add.ellipse(0, shY, shW * 0.66, shW * 0.2, 0x000000, .24);
 
@@ -897,12 +987,14 @@ class DataDrivenWorldScene extends Phaser.Scene {
         fontFamily: 'Arial, sans-serif', fontSize: '8px', color: '#4fa3a5', align: 'center',
       }).setOrigin(0.5, 1).setAlpha(0);
 
-      const container = this.add.container(npc.x, npc.y, [shadowSoft, shadow, sprite, label, hint]);
+      const container = this.add.container(pos.x, pos.y, [shadowSoft, shadow, sprite, label, hint]);
       this.setFeetOffset(container, shY);   // la sombra marca los pies del NPC
       this.npcMarkers.set(npc.key, container);
-      (container as unknown as Record<string, unknown>)['__npcConfig'] = npc;
-      (container as unknown as Record<string, unknown>)['__hintSprite'] = hint;
-      (container as unknown as Record<string, unknown>)['__labelSprite'] = label;
+      const bag = container as unknown as Record<string, unknown>;
+      bag['__npcConfig'] = npc;
+      bag['__hintSprite'] = hint;
+      bag['__labelSprite'] = label;
+      if (sprite instanceof Phaser.GameObjects.Sprite) bag['__npcSprite'] = sprite;
     }
   }
 
@@ -939,12 +1031,25 @@ class DataDrivenWorldScene extends Phaser.Scene {
    * Updates the patient NPC's tint and shake based on crisis/trust levels.
    */
   updatePatientVisualState(state: import('../../core/models/simulation.model').PatientState) {
+    const targets: Array<{ sprite: Phaser.GameObjects.Sprite; container: Phaser.GameObjects.Container; baseTint: number | null }> = [];
     for (const [key, container] of this.npcMarkers) {
       if (!key.startsWith('paciente-')) continue;
-      const sprite = container.list.find(
-        (c): c is Phaser.GameObjects.Sprite => c instanceof Phaser.GameObjects.Sprite
-      );
-      if (!sprite) continue;
+      const bag = container as unknown as Record<string, unknown>;
+      const sprite = (bag['__npcSprite'] as Phaser.GameObjects.Sprite | undefined)
+        ?? container.list.find((c): c is Phaser.GameObjects.Sprite => c instanceof Phaser.GameObjects.Sprite);
+      if (sprite) targets.push({ sprite, container, baseTint: (bag['__npcBaseTint'] as number | null) ?? null });
+    }
+    // La paciente real del caso es un marker PERSON del backend (escucha-segura).
+    for (const [key, preset] of Object.entries(MAP_OBJECT_PRESETS)) {
+      if (preset !== 'paciente-vbg') continue;
+      const marker = this.markers.get(key);
+      const sprite = marker?.list.find((c): c is Phaser.GameObjects.Sprite => c instanceof Phaser.GameObjects.Sprite);
+      if (marker && sprite) {
+        const baseTint = ((sprite as unknown as Record<string, unknown>)['__personBaseTint'] as number | null) ?? null;
+        targets.push({ sprite, container: marker, baseTint });
+      }
+    }
+    for (const { sprite, container, baseTint } of targets) {
       if (state.crisisLevel >= 70) {
         sprite.setTint(0xff8888);
         if (!this.callbacks.reduceMotion) {
@@ -957,6 +1062,8 @@ class DataDrivenWorldScene extends Phaser.Scene {
         sprite.setTint(0xaaffcc);
       } else if (state.emotionalState <= 25) {
         sprite.setTint(0x8888ff);
+      } else if (baseTint != null) {
+        sprite.setTint(baseTint);
       } else {
         sprite.clearTint();
       }
@@ -1260,6 +1367,18 @@ class DataDrivenWorldScene extends Phaser.Scene {
     if (this.assetsLoaded) {
       if (isExit && this.textures.exists('dungeon-tiles')) {
         main = this.add.image(0, 0, 'dungeon-tiles', KenneyDungeonFrames.DOOR).setScale(2.5);
+      } else if (object.type === 'PERSON' && MAP_OBJECT_PRESETS[object.key]
+          && this.ensureNpcComposite(MAP_OBJECT_PRESETS[object.key])) {
+        // Persona del caso con preset modular (p. ej. la consultante): mismo
+        // universo visual que el avatar. El +16 alinea los pies del arte con la
+        // sombra del marker (que vive en y=16).
+        const presetKey = MAP_OBJECT_PRESETS[object.key];
+        const render = NPC_PRESET_RENDER[presetKey];
+        const personSprite = this.add.sprite(0, -Math.round(42 * render.scale) + 16,
+          npcAvatarTextureKey(presetKey), AVATAR_IDLE_FRAMES.down).setScale(render.scale);
+        if (render.tint != null) personSprite.setTint(render.tint);
+        (personSprite as unknown as Record<string, unknown>)['__personBaseTint'] = render.tint ?? null;
+        main = personSprite;
       } else if (object.type === 'PERSON' && this.textures.exists('characters')) {
         main = this.add.sprite(0, 0, 'characters', KenneyCharFrames.NPC_PATIENT_IDLE)
           .setScale(this.authoredRoomActive ? 2.4 : 2);
