@@ -116,6 +116,7 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
               <app-game-world #gameWorld id="game-area" class="game-surface" [world]="w"
                 [scenarioConfig]="scenarioConfig()"
                 [nearbyInteraction]="nearbyInteraction()" [selectedInteractionKey]="selectedInteraction()?.key ?? null"
+                [motionPaused]="worldMotionPaused()"
                 (proximity)="nearbyInteraction.set($event)" (interact)="openInteraction($event)"
                 (npcInteract)="openNpcDialogue($event)"
                 (positionChange)="rememberPosition($event.x, $event.y)" />
@@ -604,6 +605,10 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   }));
 
   readonly sceneObjective = computed(() => getSceneObjective(this.attempt()?.currentNode.key));
+
+  /** El mundo se congela con diálogo, journal u outcome abiertos (Fase 5/13). */
+  readonly worldMotionPaused = computed(() =>
+    this.dialogue() !== null || this.journalOpen() || (this.attempt()?.status ?? 'IN_PROGRESS') !== 'IN_PROGRESS');
 
   readonly selectedToolCode = computed(() => {
     const sel = this.selectedInteraction();

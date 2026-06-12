@@ -3,6 +3,9 @@
  * Kept independent of Phaser so they are unit-testable; the scene supplies
  * collision checks and timing.
  */
+import {
+  NpcMotionAnchor, NpcMotionBehavior, NpcMotionConfig, NpcMovementZone,
+} from '../../core/models/simulation.model';
 
 export type MovementPattern =
   | { type: 'idle' }
@@ -73,6 +76,83 @@ export function pickWanderTarget(
 
 export function bobOffset(elapsedMs: number, amplitudePx: number, periodMs: number): number {
   return amplitudePx * Math.sin((2 * Math.PI * elapsedMs) / periodMs);
+}
+
+// ─── NPC motion (flujo competitivo) — sobrio, clínico, nada arcade ───────────
+
+export const NPC_BEHAVIOR_SPEED: Record<NpcMotionBehavior, number> = {
+  idle: 0, 'subtle-wander': 18, pace: 24, patrol: 28, avoidant: 20, attentive: 0,
+};
+
+export const NPC_BEHAVIOR_PAUSE: Record<NpcMotionBehavior, number> = {
+  idle: 0, 'subtle-wander': 2400, pace: 1600, patrol: 900, avoidant: 1400, attentive: 0,
+};
+
+export const DEFAULT_NPC_ZONE_HALF = 26;
+/** Distancia a la que un avoidant reacciona al jugador. */
+export const AVOIDANT_TRIGGER_RANGE = 70;
+/** Paso corto máximo del avoidant (no debe parecer huida). */
+export const AVOIDANT_STEP_MAX = 16;
+
+export function npcSpeed(cfg: NpcMotionConfig): number {
+  return cfg.speed ?? NPC_BEHAVIOR_SPEED[cfg.behavior] ?? 0;
+}
+
+export function npcPause(cfg: NpcMotionConfig, anchor?: NpcMotionAnchor | null): number {
+  return anchor?.pauseMs ?? cfg.pauseMs ?? NPC_BEHAVIOR_PAUSE[cfg.behavior] ?? 0;
+}
+
+export function npcZone(cfg: NpcMotionConfig, origin: { x: number; y: number }): NpcMovementZone {
+  if (cfg.zone) return cfg.zone;
+  const r = cfg.radius ?? DEFAULT_NPC_ZONE_HALF;
+  return { x: origin.x - r, y: origin.y - r, width: r * 2, height: r * 2 };
+}
+
+export function pointInZone(p: { x: number; y: number }, zone: NpcMovementZone): boolean {
+  return p.x >= zone.x && p.x <= zone.x + zone.width
+    && p.y >= zone.y && p.y <= zone.y + zone.height;
+}
+
+export function clampToZone(p: { x: number; y: number }, zone: NpcMovementZone): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(p.x, zone.x), zone.x + zone.width),
+    y: Math.min(Math.max(p.y, zone.y), zone.y + zone.height),
+  };
+}
+
+export function pickZoneTarget(zone: NpcMovementZone, rand: () => number): { x: number; y: number } {
+  return { x: zone.x + rand() * zone.width, y: zone.y + rand() * zone.height };
+}
+
+export function nextAnchorIndex(idx: number, length: number): number {
+  return length > 0 ? (idx + 1) % length : 0;
+}
+
+/**
+ * Objetivo avoidant: paso CORTO (≤ AVOIDANT_STEP_MAX) hacia el punto de la zona
+ * que más se aleja del jugador, muestreando candidatos. Postura, no huida.
+ */
+export function avoidantTarget(
+  zone: NpcMovementZone,
+  from: { x: number; y: number },
+  player: { x: number; y: number },
+  rand: () => number,
+  samples = 6,
+): { x: number; y: number } {
+  let best = from;
+  let bestDist = Math.hypot(from.x - player.x, from.y - player.y);
+  for (let i = 0; i < samples; i++) {
+    const candidate = pickZoneTarget(zone, rand);
+    const d = Math.hypot(candidate.x - player.x, candidate.y - player.y);
+    if (d > bestDist) { best = candidate; bestDist = d; }
+  }
+  return clampToZone(stepToward(from, best, AVOIDANT_STEP_MAX), zone);
+}
+
+/** Con reduced motion solo se permite idle, o attentive (facing sin traslación). */
+export function effectiveNpcBehavior(behavior: NpcMotionBehavior, reducedMotion: boolean): NpcMotionBehavior {
+  if (!reducedMotion) return behavior;
+  return behavior === 'attentive' ? 'attentive' : 'idle';
 }
 
 /**

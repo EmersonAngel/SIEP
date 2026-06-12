@@ -1,6 +1,8 @@
 import {
-  bobOffset, defaultPatternForType, freeTileNear, parseMovementPattern,
-  pickWanderTarget, reached, resolvePattern, stepToward,
+  AVOIDANT_STEP_MAX, avoidantTarget, bobOffset, clampToZone, defaultPatternForType,
+  effectiveNpcBehavior, freeTileNear, nextAnchorIndex, npcPause, npcSpeed, npcZone,
+  parseMovementPattern, pickWanderTarget, pickZoneTarget, pointInZone, reached,
+  resolvePattern, stepToward,
 } from './scene-motion.util';
 
 describe('scene-motion.util', () => {
@@ -71,6 +73,65 @@ describe('scene-motion.util', () => {
       const spot = freeTileNear({ x: 50, y: 50 }, blocked, 24, 3);
       expect(blocked(spot.x, spot.y)).toBe(false);
       expect(spot).not.toEqual({ x: 50, y: 50 });
+    });
+  });
+
+  describe('movimiento NPC por zonas (flujo competitivo)', () => {
+    const zone = { x: 100, y: 200, width: 80, height: 40 };
+
+    it('pickZoneTarget queda SIEMPRE dentro de la zona', () => {
+      const rands = [0, 0.25, 0.5, 0.75, 0.999];
+      for (const a of rands) for (const b of rands) {
+        const seq = [a, b];
+        const target = pickZoneTarget(zone, () => seq.shift() ?? 0.5);
+        expect(target.x).toBeGreaterThanOrEqual(zone.x);
+        expect(target.x).toBeLessThanOrEqual(zone.x + zone.width);
+        expect(target.y).toBeGreaterThanOrEqual(zone.y);
+        expect(target.y).toBeLessThanOrEqual(zone.y + zone.height);
+      }
+    });
+
+    it('clampToZone/pointInZone delimitan la zona', () => {
+      expect(pointInZone({ x: 120, y: 210 }, zone)).toBe(true);
+      expect(pointInZone({ x: 90, y: 210 }, zone)).toBe(false);
+      expect(clampToZone({ x: 0, y: 999 }, zone)).toEqual({ x: 100, y: 240 });
+    });
+
+    it('npcZone usa zone explícita o caja por radius alrededor del origen', () => {
+      expect(npcZone({ behavior: 'pace', zone }, { x: 0, y: 0 })).toEqual(zone);
+      expect(npcZone({ behavior: 'subtle-wander', radius: 20 }, { x: 50, y: 60 }))
+        .toEqual({ x: 30, y: 40, width: 40, height: 40 });
+    });
+
+    it('pace/patrol recorren anchors en orden cíclico', () => {
+      expect(nextAnchorIndex(0, 3)).toBe(1);
+      expect(nextAnchorIndex(2, 3)).toBe(0);
+    });
+
+    it('avoidant elige un objetivo dentro de la zona y más lejos del jugador', () => {
+      const player = { x: 100, y: 200 };  // esquina superior izquierda de la zona
+      const from = { x: 110, y: 210 };
+      const target = avoidantTarget(zone, from, player, Math.random);
+      expect(pointInZone(target, zone)).toBe(true);
+      const before = Math.hypot(from.x - player.x, from.y - player.y);
+      const after = Math.hypot(target.x - player.x, target.y - player.y);
+      expect(after).toBeGreaterThanOrEqual(before);
+      // paso corto, no huida arcade
+      expect(Math.hypot(target.x - from.x, target.y - from.y)).toBeLessThanOrEqual(AVOIDANT_STEP_MAX + 1e-9);
+    });
+
+    it('velocidades/pausas: default por behavior y override por config', () => {
+      expect(npcSpeed({ behavior: 'subtle-wander' })).toBe(18);
+      expect(npcSpeed({ behavior: 'patrol', speed: 30 })).toBe(30);
+      expect(npcPause({ behavior: 'pace' }, null)).toBe(1600);
+      expect(npcPause({ behavior: 'pace', pauseMs: 500 }, { x: 0, y: 0, pauseMs: 900 })).toBe(900);
+    });
+
+    it('reduced motion fuerza idle salvo attentive (solo facing)', () => {
+      expect(effectiveNpcBehavior('patrol', true)).toBe('idle');
+      expect(effectiveNpcBehavior('subtle-wander', true)).toBe('idle');
+      expect(effectiveNpcBehavior('attentive', true)).toBe('attentive');
+      expect(effectiveNpcBehavior('pace', false)).toBe('pace');
     });
   });
 });

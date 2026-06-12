@@ -22,7 +22,9 @@ import {
   getSceneDisplayLabel,
 } from './scene-map-display.util';
 import {
-  freeTileNear, MovementPattern, pickWanderTarget, reached, resolvePattern, stepToward,
+  AVOIDANT_TRIGGER_RANGE, avoidantTarget, effectiveNpcBehavior, freeTileNear,
+  MovementPattern, nextAnchorIndex, npcPause, npcSpeed, npcZone, pickWanderTarget,
+  pickZoneTarget, reached, resolvePattern, stepToward,
 } from './scene-motion.util';
 import { SceneGuideEntry } from './scene-guide.config';
 import { DEPTH, actorDepth, tiledLayerDepth } from './depth-sort.util';
@@ -45,6 +47,7 @@ import {
   computePlayerStep,
   playerHitbox,
   rectsIntersect,
+  resolveDirection,
 } from './player-motion.util';
 import {
   AVATAR_ANIM_KEYS,
@@ -68,7 +71,7 @@ import {
 } from './npc-avatar-presets';
 import { parseAvatar } from '../character/avatar-config.util';
 import { AVATAR_STORAGE_KEY } from '../character/avatar.store';
-import { NpcAvatarPresetKey } from '../../core/models/simulation.model';
+import { NpcAvatarPresetKey, NpcMotionConfig, NpcMovementZone } from '../../core/models/simulation.model';
 
 interface WorldCallbacks {
   onProximity:   (obj: MapObjectState | null) => void;
@@ -87,6 +90,18 @@ interface AmbientMover {
   target: { x: number; y: number } | null;
   retargetAt: number;
   patrolIdx: number;
+}
+
+interface NpcMover {
+  key: string;
+  cfg: NpcMotionConfig;
+  zone: NpcMovementZone;
+  target: { x: number; y: number } | null;
+  anchorIdx: number;
+  pauseUntil: number;
+  lastPose: { direction: PlayerDirection | null; walking: boolean };
+  /** null = sprite legacy (solo flip, sin animaciones modulares). */
+  presetKey: string | null;
 }
 
 class DataDrivenWorldScene extends Phaser.Scene {
@@ -112,6 +127,9 @@ class DataDrivenWorldScene extends Phaser.Scene {
   private readonly markerLabels = new Map<string, Phaser.GameObjects.Text>();
   private readonly doorHints  = new Map<string, Phaser.GameObjects.Container>();
   private readonly ambientMovers = new Map<string, AmbientMover>();
+  private readonly npcMovers = new Map<string, NpcMover>();
+  /** El mundo se congela con diálogo/journal/outcome abiertos (Fase 5/13). */
+  private motionPaused = false;
   private readonly AMBIENT_SPEED = 22;        // px/sec — slow, clinical
   private readonly AMBIENT_RETARGET_MS = 2600;
   private guideEntry: SceneGuideEntry | null = null;
@@ -280,6 +298,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.updateNearestInteraction();
     this.updateNpcHints();
     this.updateAmbientMovers(time, delta);
+    this.updateNpcMovers(time, delta);
     this.updateGuide(delta);
     // 2.5D: re-ordena por Y a los actores que se mueven
     if (this.player) this.ysort(this.player);
@@ -288,6 +307,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
       const marker = this.markers.get(mover.key);
       if (marker) this.ysort(marker);
     }
+    for (const container of this.npcMarkers.values()) this.ysort(container);
     this.checkExitTriggers();
     this.checkDbDoorTriggers();
   }
@@ -303,6 +323,9 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.scenarioConfig = config ?? undefined;
     if (this.ready && this.world) this.renderWorld();
   }
+
+  /** Pausa el movimiento del mundo (NPCs y ambient) sin congelar al jugador. */
+  setMotionPaused(paused: boolean) { this.motionPaused = paused; }
 
   /**
    * Called by Angular when the player steps through an exit.
@@ -556,6 +579,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.doorHints.clear();
     this.npcMarkers.clear();
     this.ambientMovers.clear();
+    this.npcMovers.clear();
     this.tiledExits.clear();
     this.wallsLayer = undefined;
     this.authoredRoomActive = false;
@@ -714,6 +738,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     this.doorHints.clear();
     this.npcMarkers.clear();
     this.ambientMovers.clear();
+    this.npcMovers.clear();
     this.tiledExits.clear();
     this.wallsLayer = undefined;
     this.interactionCooldown = 0;
@@ -895,6 +920,118 @@ class DataDrivenWorldScene extends Phaser.Scene {
     return true;
   }
 
+  /** Registra el mover del NPC (si trae motion) con su posición real de spawn. */
+  private registerNpcMover(npc: NpcConfig, pos: { x: number; y: number }, presetKey: string | null): void {
+    if (!npc.motion) return;
+    this.npcMovers.set(npc.key, {
+      key: npc.key,
+      cfg: npc.motion,
+      zone: npcZone(npc.motion, pos),
+      target: null,
+      anchorIdx: 0,
+      pauseUntil: this.time.now + (npc.motion.startDelayMs ?? 600),
+      lastPose: { direction: (npc.facing ?? 'down') as PlayerDirection, walking: false },
+      presetKey,
+    });
+  }
+
+  /** Pose del NPC (dirección + walking) solo si cambió — como el jugador. */
+  private applyNpcPose(mover: NpcMover, container: Phaser.GameObjects.Container, direction: PlayerDirection, walking: boolean): void {
+    if (mover.lastPose.direction === direction && mover.lastPose.walking === walking) return;
+    mover.lastPose = { direction, walking };
+    const sprite = (container as unknown as Record<string, unknown>)['__npcSprite'] as Phaser.GameObjects.Sprite | undefined;
+    if (!sprite) return;
+    if (!mover.presetKey) { sprite.setFlipX(direction === 'left'); return; }  // legacy: solo flip
+    if (walking && !this.callbacks.reduceMotion) {
+      sprite.setFlipX(direction === 'right');
+      const keys = npcAvatarAnimKeys(mover.presetKey);
+      sprite.play(direction === 'down' ? keys.down : direction === 'up' ? keys.up : keys.side, true);
+      return;
+    }
+    this.applyNpcFacing(container, direction);
+  }
+
+  private updateNpcMovers(time: number, delta: number) {
+    if (this.motionPaused || this.npcMovers.size === 0) return;
+    for (const mover of this.npcMovers.values()) {
+      const container = this.npcMarkers.get(mover.key);
+      if (!container) continue;
+      const behavior = effectiveNpcBehavior(mover.cfg.behavior, this.callbacks.reduceMotion);
+      const lastDir = mover.lastPose.direction ?? 'down';
+
+      if (behavior === 'idle') { this.applyNpcPose(mover, container, lastDir, false); continue; }
+
+      if (behavior === 'attentive') {
+        // Gira hacia el jugador cuando está cerca; nunca se traslada.
+        if (this.player) {
+          const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, container.x, container.y);
+          if (d <= 110) {
+            const dir = resolveDirection(this.player.x - container.x, this.player.y - container.y, lastDir);
+            this.applyNpcPose(mover, container, dir, false);
+          }
+        }
+        continue;
+      }
+
+      if (time < mover.pauseUntil) { this.applyNpcPose(mover, container, lastDir, false); continue; }
+
+      if (!mover.target) {
+        mover.target = this.nextNpcTarget(mover, container);
+        if (!mover.target) { mover.pauseUntil = time + 600; continue; }
+      }
+
+      const next = stepToward(container, mover.target, npcSpeed(mover.cfg) * (delta / 1000));
+      const dir = resolveDirection(next.x - container.x, next.y - container.y, lastDir);
+      if (!this.wouldCollide(next.x, next.y)) {
+        container.setPosition(next.x, next.y);
+        this.applyNpcPose(mover, container, dir, true);
+      } else if (!this.wouldCollide(next.x, container.y)) {
+        container.setPosition(next.x, container.y);
+        this.applyNpcPose(mover, container, dir, true);
+      } else if (!this.wouldCollide(container.x, next.y)) {
+        container.setPosition(container.x, next.y);
+        this.applyNpcPose(mover, container, dir, true);
+      } else {
+        // Bloqueado del todo: nuevo objetivo después, nunca caminar en el sitio.
+        mover.target = null;
+        mover.pauseUntil = time + 900;
+        this.applyNpcPose(mover, container, dir, false);
+        continue;
+      }
+
+      if (reached(container, mover.target, 2)) {
+        const anchors = mover.cfg.anchors ?? [];
+        const anchor = anchors.length ? anchors[mover.anchorIdx] : null;
+        this.applyNpcPose(mover, container, (anchor?.face as PlayerDirection | undefined) ?? dir, false);
+        mover.pauseUntil = time + npcPause(mover.cfg, anchor);
+        if ((mover.cfg.behavior === 'pace' || mover.cfg.behavior === 'patrol') && anchors.length) {
+          mover.anchorIdx = nextAnchorIndex(mover.anchorIdx, anchors.length);
+        }
+        mover.target = null;
+      }
+    }
+  }
+
+  private nextNpcTarget(mover: NpcMover, container: Phaser.GameObjects.Container): { x: number; y: number } | null {
+    const behavior = mover.cfg.behavior;
+    if (behavior === 'subtle-wander') {
+      const candidate = pickZoneTarget(mover.zone, Math.random);
+      return this.wouldCollide(candidate.x, candidate.y) ? null : candidate;
+    }
+    if ((behavior === 'pace' || behavior === 'patrol') && mover.cfg.anchors?.length) {
+      const anchor = mover.cfg.anchors[mover.anchorIdx];
+      return { x: anchor.x, y: anchor.y };
+    }
+    if (behavior === 'avoidant') {
+      if (!this.player) return null;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, container.x, container.y);
+      if (d > AVOIDANT_TRIGGER_RANGE) return null;
+      const candidate = avoidantTarget(mover.zone, container, this.player, Math.random);
+      return this.wouldCollide(candidate.x, candidate.y) ? null : candidate;
+    }
+    return null;
+  }
+
   /** Frame de reposo del NPC modular según dirección (la fila lateral mira a la IZQUIERDA). */
   private applyNpcFacing(container: Phaser.GameObjects.Container, direction: 'down' | 'up' | 'left' | 'right'): void {
     const sprite = (container as unknown as Record<string, unknown>)['__npcSprite'] as Phaser.GameObjects.Sprite | undefined;
@@ -956,6 +1093,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
         bag['__npcPreset'] = presetKey;
         bag['__npcBaseTint'] = baseTint;
         this.applyNpcFacing(container, npc.facing ?? 'down');
+        this.registerNpcMover(npc, pos, presetKey);
         continue;
       }
 
@@ -995,6 +1133,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
       bag['__hintSprite'] = hint;
       bag['__labelSprite'] = label;
       if (sprite instanceof Phaser.GameObjects.Sprite) bag['__npcSprite'] = sprite;
+      this.registerNpcMover(npc, pos, null);
     }
   }
 
@@ -1458,7 +1597,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
   }
 
   private updateAmbientMovers(time: number, delta: number) {
-    if (this.callbacks.reduceMotion || this.ambientMovers.size === 0) return;
+    if (this.motionPaused || this.callbacks.reduceMotion || this.ambientMovers.size === 0) return;
     const step = this.AMBIENT_SPEED * (delta / 1000);
     for (const mover of this.ambientMovers.values()) {
       const marker = this.markers.get(mover.key);
@@ -1697,6 +1836,8 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
   readonly selectedInteractionKey = input<string | null>(null);
   readonly nearbyInteraction = input<MapObjectState | null>(null);
   readonly guide = input<SceneGuideEntry | null>(null);
+  /** true mientras hay diálogo/journal/outcome: congela NPCs y ambient. */
+  readonly motionPaused = input(false);
   readonly proximity = output<MapObjectState | null>();
   readonly interact = output<MapObjectState>();
   readonly positionChange = output<{ x: number; y: number }>();
@@ -1721,6 +1862,7 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
     if (changes['world'] && this.world()) this.scene?.setWorld(this.world()!);
     if (changes['selectedInteractionKey']) this.scene?.setSelected(this.selectedInteractionKey());
     if (changes['guide']) this.scene?.setGuide(this.guide());
+    if (changes['motionPaused']) this.scene?.setMotionPaused(this.motionPaused());
   }
 
   ngOnDestroy() {
@@ -1775,6 +1917,7 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
       this.scene?.setScenarioConfig(this.scenarioConfig());
       if (this.world()) this.scene?.setWorld(this.world()!);
       this.scene?.setGuide(this.guide());
+      this.scene?.setMotionPaused(this.motionPaused());
     }, 0);
   }
 }
