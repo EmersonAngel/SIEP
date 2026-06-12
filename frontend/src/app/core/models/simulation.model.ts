@@ -695,6 +695,48 @@ export interface RoomExitConfig {
   entryY: number;
 }
 
+// ─── NPC modular (flujo competitivo) ──────────────────────────────────────────
+
+export type NpcAvatarPresetKey =
+  | 'madre-vbg'
+  | 'paciente-vbg'
+  | 'colega-clinica'
+  | 'supervisor-clinico'
+  | 'seguridad'
+  | 'adolescente-nna';
+
+export type NpcMotionBehavior =
+  | 'idle'
+  | 'subtle-wander'
+  | 'pace'
+  | 'patrol'
+  | 'avoidant'
+  | 'attentive';
+
+export interface NpcMotionAnchor {
+  x: number;
+  y: number;
+  pauseMs?: number;
+  face?: 'down' | 'up' | 'left' | 'right';
+}
+
+export interface NpcMovementZone {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface NpcMotionConfig {
+  behavior: NpcMotionBehavior;
+  zone?: NpcMovementZone;
+  anchors?: NpcMotionAnchor[];
+  radius?: number;
+  speed?: number;
+  pauseMs?: number;
+  startDelayMs?: number;
+}
+
 export interface NpcConfig {
   key: string;
   npcType: 'supervisor' | 'colleague' | 'family' | 'witness';
@@ -706,6 +748,13 @@ export interface NpcConfig {
   /** Phaser frame index in the 'characters' spritesheet */
   frameIndex: number;
   dialogue: NpcDialogue;
+  /** Preset modular (mismo universo visual que el avatar). Si falta → sprite legacy. */
+  avatarPresetKey?: NpcAvatarPresetKey;
+  motion?: NpcMotionConfig;
+  facing?: 'down' | 'up' | 'left' | 'right';
+  /** Override de escala de render (default: el del preset). */
+  scale?: number;
+  emotion?: 'neutral' | 'calm' | 'worried' | 'anxious' | 'receptive' | 'closed';
 }
 
 export interface NpcDialogue {
