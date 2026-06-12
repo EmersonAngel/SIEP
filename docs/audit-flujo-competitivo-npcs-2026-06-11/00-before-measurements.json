@@ -1,0 +1,119 @@
+[
+  {
+    "innerWidth": 1600,
+    "innerHeight": 900,
+    "scrollWidth": 1600,
+    "bodyScrollWidth": 1600,
+    "canvasRect": null,
+    "contextBar": "",
+    "avatarStored": null,
+    "label": "personaje-1600x900",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": null,
+        "behavior": null
+      },
+      {
+        "key": "colega-urgencias",
+        "preset": null,
+        "behavior": null
+      }
+    ]
+  },
+  {
+    "innerWidth": 1600,
+    "innerHeight": 900,
+    "scrollWidth": 1600,
+    "bodyScrollWidth": 1600,
+    "canvasRect": {
+      "x": 112,
+      "y": 60,
+      "width": 1375.625,
+      "height": 773.796875,
+      "right": 1487.625,
+      "bottom": 833.796875
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "game-explore-1600x900",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": null,
+        "behavior": null
+      },
+      {
+        "key": "colega-urgencias",
+        "preset": null,
+        "behavior": null
+      }
+    ]
+  },
+  {
+    "innerWidth": 1600,
+    "innerHeight": 900,
+    "scrollWidth": 1600,
+    "bodyScrollWidth": 1600,
+    "canvasRect": {
+      "x": 242,
+      "y": 133,
+      "width": 1116,
+      "height": 627.75,
+      "right": 1358,
+      "bottom": 760.75
+    },
+    "contextBar": "EPrimeros Auxilios PsicológicosConsulta o aplica una guía breve para estabilizar emocionalmente a la familia durante la crisis.",
+    "avatarStored": null,
+    "label": "game-npcs-1600x900",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": null,
+        "behavior": null
+      },
+      {
+        "key": "colega-urgencias",
+        "preset": null,
+        "behavior": null
+      }
+    ]
+  },
+  {
+    "innerWidth": 390,
+    "innerHeight": 844,
+    "scrollWidth": 390,
+    "bodyScrollWidth": 390,
+    "canvasRect": {
+      "x": 9,
+      "y": 310,
+      "width": 372,
+      "height": 209.25,
+      "right": 381,
+      "bottom": 519.25
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "mobile-390x844",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": null,
+        "behavior": null
+      },
+      {
+        "key": "colega-urgencias",
+        "preset": null,
+        "behavior": null
+      }
+    ]
+  }
+]

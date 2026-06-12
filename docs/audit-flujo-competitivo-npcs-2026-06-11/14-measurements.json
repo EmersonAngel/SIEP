@@ -1,0 +1,207 @@
+[
+  {
+    "innerWidth": 1600,
+    "innerHeight": 900,
+    "scrollWidth": 1600,
+    "bodyScrollWidth": 1600,
+    "canvasRect": {
+      "x": 112,
+      "y": 60,
+      "width": 1375.625,
+      "height": 773.796875,
+      "right": 1487.625,
+      "bottom": 833.796875
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "npcs-1600x900",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": "colega-clinica",
+        "behavior": "attentive"
+      },
+      {
+        "key": "madre-familiar",
+        "preset": "madre-vbg",
+        "behavior": "pace"
+      },
+      {
+        "key": "seguridad-entrada",
+        "preset": "seguridad",
+        "behavior": "patrol"
+      },
+      {
+        "key": "colega-guardia",
+        "preset": "supervisor-clinico",
+        "behavior": "subtle-wander"
+      }
+    ]
+  },
+  {
+    "innerWidth": 1600,
+    "innerHeight": 900,
+    "scrollWidth": 1600,
+    "bodyScrollWidth": 1600,
+    "canvasRect": {
+      "x": 112,
+      "y": 60,
+      "width": 1375.625,
+      "height": 773.796875,
+      "right": 1487.625,
+      "bottom": 833.796875
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "npc-motion-1600x900",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": "colega-clinica",
+        "behavior": "attentive"
+      },
+      {
+        "key": "madre-familiar",
+        "preset": "madre-vbg",
+        "behavior": "pace"
+      },
+      {
+        "key": "seguridad-entrada",
+        "preset": "seguridad",
+        "behavior": "patrol"
+      },
+      {
+        "key": "colega-guardia",
+        "preset": "supervisor-clinico",
+        "behavior": "subtle-wander"
+      }
+    ]
+  },
+  {
+    "innerWidth": 1366,
+    "innerHeight": 768,
+    "scrollWidth": 1366,
+    "bodyScrollWidth": 1366,
+    "canvasRect": {
+      "x": 112,
+      "y": 60,
+      "width": 1140.96875,
+      "height": 641.796875,
+      "right": 1252.96875,
+      "bottom": 701.796875
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "desktop-1366x768",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": "colega-clinica",
+        "behavior": "attentive"
+      },
+      {
+        "key": "madre-familiar",
+        "preset": "madre-vbg",
+        "behavior": "pace"
+      },
+      {
+        "key": "seguridad-entrada",
+        "preset": "seguridad",
+        "behavior": "patrol"
+      },
+      {
+        "key": "colega-guardia",
+        "preset": "supervisor-clinico",
+        "behavior": "subtle-wander"
+      }
+    ]
+  },
+  {
+    "innerWidth": 390,
+    "innerHeight": 844,
+    "scrollWidth": 390,
+    "bodyScrollWidth": 390,
+    "canvasRect": {
+      "x": 9,
+      "y": 310,
+      "width": 372,
+      "height": 209.25,
+      "right": 381,
+      "bottom": 519.25
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "mobile-390x844",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": "colega-clinica",
+        "behavior": "attentive"
+      },
+      {
+        "key": "madre-familiar",
+        "preset": "madre-vbg",
+        "behavior": "pace"
+      },
+      {
+        "key": "seguridad-entrada",
+        "preset": "seguridad",
+        "behavior": "patrol"
+      },
+      {
+        "key": "colega-guardia",
+        "preset": "supervisor-clinico",
+        "behavior": "subtle-wander"
+      }
+    ]
+  },
+  {
+    "innerWidth": 390,
+    "innerHeight": 844,
+    "scrollWidth": 390,
+    "bodyScrollWidth": 390,
+    "canvasRect": {
+      "x": 9,
+      "y": 310,
+      "width": 372,
+      "height": 209.25,
+      "right": 381,
+      "bottom": 519.25
+    },
+    "contextBar": "WASD mover · E interactuar · J bitácora · Esc salida segura",
+    "avatarStored": null,
+    "label": "mobile-report-390x844",
+    "consoleErrors": [],
+    "asset404": [],
+    "scenarioNpcs": [
+      {
+        "key": "enfermera-urgencias",
+        "preset": "colega-clinica",
+        "behavior": "attentive"
+      },
+      {
+        "key": "madre-familiar",
+        "preset": "madre-vbg",
+        "behavior": "pace"
+      },
+      {
+        "key": "seguridad-entrada",
+        "preset": "seguridad",
+        "behavior": "patrol"
+      },
+      {
+        "key": "colega-guardia",
+        "preset": "supervisor-clinico",
+        "behavior": "subtle-wander"
+      }
+    ]
+  }
+]
