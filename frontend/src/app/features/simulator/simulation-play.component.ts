@@ -114,7 +114,13 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
             [progressLabel]="progressLabel()"
             [locationLabel]="world()?.map?.title ?? ''"
             [journalOpen]="journalOpen()"
-            (toggleJournal)="journalOpen.set(!journalOpen())" />
+            [musicMuted]="musicMuted()"
+            [sfxMuted]="sfxMuted()"
+            [reduceMotion]="reduceMotion()"
+            (toggleJournal)="journalOpen.set(!journalOpen())"
+            (toggleMusic)="toggleMusicMute()"
+            (toggleSfx)="toggleSfxMute()"
+            (toggleReduceMotion)="toggleReduceMotion()" />
         </header>
 
         <main class="main-zone">
@@ -140,6 +146,8 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
                 [guide]="sceneGuide()"
                 [nearbyInteraction]="nearbyInteraction()" [selectedInteractionKey]="selectedInteraction()?.key ?? null"
                 [motionPaused]="worldMotionPaused()"
+                [sfxMuted]="sfxMuted()"
+                [reduceMotion]="reduceMotion()"
                 (proximity)="nearbyInteraction.set($event)" (interact)="openInteraction($event)"
                 (npcInteract)="openNpcDialogue($event)"
                 (roomExit)="onRoomExit($event)"
@@ -658,6 +666,9 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   readonly roomBanner   = signal('');
   /** Salto temporal / texto de transición autorado (map.ambient.transitionText). */
   readonly transitionNote = signal('');
+  readonly musicMuted = signal(false);
+  readonly sfxMuted = signal(false);
+  readonly reduceMotion = signal(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   private readonly seenTransitionMapKeys = new Set<string>();
 
   /** Estado reactivo de la paciente (Fase 8) — alimenta HUD y tint/shake del NPC. */
@@ -754,6 +765,8 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
 
   private bootstrapAttempt(attempt: SimulationAttemptState) {
     this.audioDirector.init();
+    this.musicMuted.set(this.audioDirector.isMusicMuted());
+    this.sfxMuted.set(this.audioDirector.isSfxMuted());
     this.attempt.set(attempt);
     this.patientState.set(PATIENT_INITIAL_STATE);
     this.viewedNpcKeys.set(this.restoreViewedNpcKeys(attempt));
@@ -1074,7 +1087,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
             this.audioDirector.playSfx('session_complete');
           }
           if (updated.feedback) {
-            const retryRequired = updated.feedback.prohibitedConduct || updated.feedback.classification === 'INADEQUATE';
+            const retryRequired = this.feedbackRequiresRetry(updated.feedback);
             if (!retryRequired) {
               // Consecuencia visible: la paciente reacciona (HUD + tint/shake del NPC).
               const nextPatient = applyFeedbackToPatient(this.patientState(), this.interventionRules, updated.feedback);
@@ -1255,6 +1268,25 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     }, 5000);
   }
 
+  toggleMusicMute(): void {
+    const muted = this.audioDirector.toggleMusicMuted();
+    this.musicMuted.set(muted);
+    if (!muted) this.audioDirector.setStressLevel(this.attempt()?.stressIndex ?? 0);
+    this.announce(muted ? 'Musica silenciada.' : 'Musica activada.');
+  }
+
+  toggleSfxMute(): void {
+    const muted = this.audioDirector.toggleSfxMuted();
+    this.sfxMuted.set(muted);
+    this.announce(muted ? 'Sonidos de acciones silenciados.' : 'Sonidos de acciones activados.');
+  }
+
+  toggleReduceMotion(): void {
+    const reduced = !this.reduceMotion();
+    this.reduceMotion.set(reduced);
+    this.announce(reduced ? 'Movimiento reducido activado.' : 'Movimiento reducido desactivado.');
+  }
+
   private evidenceMissingMessage(def: NodeEvidenceDef, missing: string[]): string {
     const items = missing
       .map(item => this.evidenceMissingItemLabel(item))
@@ -1311,7 +1343,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   }
 
   private buildSupervisionDialogue(feedback: SimulationFeedback): DialogueState {
-    const retryRequired = feedback.prohibitedConduct || feedback.classification === 'INADEQUATE';
+    const retryRequired = this.feedbackRequiresRetry(feedback);
     const lines: DialogueState['lines'] = [
       { order: 1, speakerName: 'Supervisión clínica', text: feedback.message, emotion: feedback.prohibitedConduct ? 'danger' : 'neutral' }
     ];
@@ -1414,6 +1446,10 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
       attemptToken: attempt.attemptToken,
       viewedNpcKeys: Array.from(this.viewedNpcKeys()),
     }));
+  }
+
+  private feedbackRequiresRetry(feedback: Pick<SimulationFeedback, 'classification' | 'prohibitedConduct'>): boolean {
+    return feedback.prohibitedConduct || feedback.classification === 'INADEQUATE' || feedback.classification === 'RISKY';
   }
 
   private restoreViewedNpcKeys(attempt: SimulationAttemptState): ReadonlySet<string> {

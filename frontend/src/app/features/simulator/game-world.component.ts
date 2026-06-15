@@ -84,6 +84,7 @@ interface WorldCallbacks {
   onEnterRoom:   (targetNodeKey: string, entryX: number, entryY: number) => void;
   onNpcInteract: (npc: NpcConfig) => void;
   reduceMotion:  boolean;
+  sfxMuted:       boolean;
 }
 
 interface AmbientMover {
@@ -280,7 +281,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
         this.callbacks.onPosition(Math.round(this.player.x), Math.round(this.player.y));
         this.applyPlayerPose(step.direction, true);
         // ── Footstep audio: one random variant every STEP_INTERVAL ms ────────
-        if (!this.callbacks.reduceMotion) {
+        if (!this.callbacks.reduceMotion && !this.callbacks.sfxMuted) {
           this.stepTimer += delta;
           if (this.stepTimer >= this.STEP_INTERVAL) {
             this.stepTimer = 0;
@@ -345,6 +346,13 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
   /** Pausa el movimiento del mundo (NPCs y ambient) sin congelar al jugador. */
   setMotionPaused(paused: boolean) { this.motionPaused = paused; }
+
+  setReduceMotion(reduced: boolean) { this.callbacks.reduceMotion = reduced; }
+
+  setSfxMuted(muted: boolean) {
+    this.callbacks.sfxMuted = muted;
+    this.sound.mute = muted;
+  }
 
   /**
    * Called by Angular when the player steps through an exit.
@@ -1873,7 +1881,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
       this.refreshMarkerStates();
       // Play blip only when *entering* range (nextKey goes null → key), not on every frame.
       // suppressSound=true on spawn/world-switch to avoid a false-positive blip on load.
-      if (nextKey && !this.callbacks.reduceMotion && !suppressSound) {
+      if (nextKey && !this.callbacks.reduceMotion && !this.callbacks.sfxMuted && !suppressSound) {
         this.sound.play('proximity-blip', { volume: 0.45 });
       }
     }
@@ -1946,6 +1954,8 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
   readonly guide = input<SceneGuideEntry | null>(null);
   /** true mientras hay diálogo/journal/outcome: congela NPCs y ambient. */
   readonly motionPaused = input(false);
+  readonly sfxMuted = input(false);
+  readonly reduceMotion = input<boolean | null>(null);
   readonly proximity = output<MapObjectState | null>();
   readonly interact = output<MapObjectState>();
   readonly positionChange = output<{ x: number; y: number }>();
@@ -1971,6 +1981,8 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
     if (changes['selectedInteractionKey']) this.scene?.setSelected(this.selectedInteractionKey());
     if (changes['guide']) this.scene?.setGuide(this.guide());
     if (changes['motionPaused']) this.scene?.setMotionPaused(this.motionPaused());
+    if (changes['sfxMuted']) this.scene?.setSfxMuted(this.sfxMuted());
+    if (changes['reduceMotion']) this.scene?.setReduceMotion(this.effectiveReduceMotion());
   }
 
   ngOnDestroy() {
@@ -1991,7 +2003,7 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
 
   private boot() {
     if (!this.gameHost || this.phaserGame) return;
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const reduceMotion = this.effectiveReduceMotion();
     this.zone.runOutsideAngular(() => {
       this.scene = new DataDrivenWorldScene({
         reduceMotion,
@@ -2003,6 +2015,7 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
         onEnterRoom:   (targetNodeKey, entryX, entryY) =>
           this.zone.run(() => this.enterRoom.emit({ targetNodeKey, entryX, entryY })),
         onNpcInteract: npc => this.zone.run(() => this.npcInteract.emit(npc)),
+        sfxMuted: this.sfxMuted(),
       });
       this.phaserGame = new Phaser.Game({
         type: Phaser.AUTO,
@@ -2026,6 +2039,12 @@ export class GameWorldComponent implements OnChanges, OnDestroy {
       if (this.world()) this.scene?.setWorld(this.world()!);
       this.scene?.setGuide(this.guide());
       this.scene?.setMotionPaused(this.motionPaused());
+      this.scene?.setSfxMuted(this.sfxMuted());
+      this.scene?.setReduceMotion(this.effectiveReduceMotion());
     }, 0);
+  }
+
+  private effectiveReduceMotion(): boolean {
+    return this.reduceMotion() ?? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
   }
 }

@@ -235,10 +235,10 @@ def choose_decision(attempt_id, attempt_token, decision_option_id, actor):
         raise ValidationError("La decisión no pertenece al caso del intento")
 
     effects = decision_effects.resolve(decision)
-    retry_required = decision.prohibited_conduct or decision.classification == "INADEQUATE"
+    retry_required = decision.prohibited_conduct or decision.classification in {"RISKY", "INADEQUATE"}
     if retry_required:
         message = (
-            "La intervención requiere revisar mejor la información disponible antes de continuar. "
+            "La respuesta seleccionada puede ser riesgosa o inadecuada para este momento. "
             "Puedes volver a responder esta escena."
         )
         event_type = (

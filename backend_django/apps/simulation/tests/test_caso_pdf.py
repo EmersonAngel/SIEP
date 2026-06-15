@@ -254,8 +254,12 @@ def test_final_critico_con_dos_criticas(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     state = _play_full(c, attempt_id, token, case_version_id, [
-        "h1-interrogar-victima", "h1-pap-contencion", "h2-solo-459", "h3-parcial-disonancia",
-        "c1-mediacion-perdon", "c1-riesgo-proteccion-derechos", "c2-eje-1448", "c3-parcial-clinica",
+        "h1-interrogar-victima", "h1-pap-contencion",
+        "h2-solo-459", "h2-459-1257",
+        "h3-integral-psicosocial",
+        "c1-mediacion-perdon", "c1-riesgo-proteccion-derechos",
+        "c2-2126-1098-1257",
+        "c3-integral-derechos",
     ])
     assert state["status"] == "COMPLETED"
     ending = state["completionReport"]["ending"]
@@ -269,11 +273,16 @@ def test_final_riesgo_persistente_por_omision(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     state = _play_full(c, attempt_id, token, case_version_id, [
-        "h1-pap-contencion", "h2-459-1257", "h3-integral-psicosocial",
-        "c1-patrones-infancia", "c2-2126-1098-1257", "c3-valoracion-dependientes",
+        "h1-pap-contencion",
+        "h2-459-1448", "h2-459-1257",
+        "h3-parcial-disonancia", "h3-integral-psicosocial",
+        "c1-patrones-infancia", "c1-riesgo-proteccion-derechos",
+        "c2-eje-1448", "c2-2126-1098-1257",
+        "c3-integral-derechos",
     ])
     ending = state["completionReport"]["ending"]
     assert ending["key"] == "riesgo"
+    assert ending["severityCounts"]["risky"] >= 3
 
 
 def test_final_brechas_con_parciales(estudiante, case_version_id):
@@ -281,11 +290,14 @@ def test_final_brechas_con_parciales(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     state = _play_full(c, attempt_id, token, case_version_id, [
-        "h1-pap-contencion", "h2-solo-459", "h3-pap-epicee",
+        "h1-pap-contencion",
+        "h2-459-1448", "h2-459-1257",
+        "h3-parcial-disonancia", "h3-integral-psicosocial",
         "c1-riesgo-proteccion-derechos", "c2-2126-1098-1257", "c3-integral-derechos",
     ])
     ending = state["completionReport"]["ending"]
     assert ending["key"] == "brechas"
+    assert ending["severityCounts"]["risky"] == 2
 
 
 def test_cambiar_sala_no_puntua_ni_avanza(estudiante, case_version_id):

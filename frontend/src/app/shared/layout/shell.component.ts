@@ -33,8 +33,8 @@ interface NavItem {
     MatSidenavModule
   ],
   template: `
-    <mat-sidenav-container class="portal-shell">
-      <mat-sidenav #drawer class="portal-sidenav liquid-glass" [mode]="compactNav() ? 'over' : 'side'" [opened]="!compactNav() || drawerOpen()">
+    <mat-sidenav-container class="portal-shell" [class.portal-shell--game]="inGameMode()" [autosize]="true">
+      <mat-sidenav #drawer class="portal-sidenav liquid-glass" [mode]="compactNav() ? 'over' : 'side'" [opened]="!inGameMode() && (!compactNav() || drawerOpen())">
         <div class="sidenav-header">
           <a class="portal-brand" routerLink="/portal/dashboard" aria-label="Ir al dashboard">
             <img class="portal-brand__logo" src="/assets/images/institution/logo-cue-ccaq-vertical.webp" alt="CUE Alexander Von Humboldt" width="82" height="41">
@@ -257,6 +257,16 @@ interface NavItem {
       color: #4b00b5;
     }
     .portal-content { min-height: 100vh; }
+    .portal-shell--game .portal-content { margin-left: 0 !important; }
+    .portal-shell--game .portal-sidenav,
+    .portal-shell--game .portal-topbar {
+      display: none !important;
+    }
+    .portal-shell--game .portal-main {
+      padding: 0 !important;
+      height: 100vh;
+      overflow: hidden;
+    }
     .siep-menu-trigger,
     .siep-close-trigger {
       position: relative;
@@ -686,18 +696,10 @@ export class ShellComponent implements OnDestroy {
       }
     });
 
+    this.syncGameMode(this.router.url);
     this.routerSub = this.router.events
       .pipe(filter(e => e instanceof NavigationEnd))
-      .subscribe((e: NavigationEnd) => {
-        const gameMode = isGameRoute(e.urlAfterRedirects);
-        this.inGameMode.set(gameMode);
-        this.closeMenu();
-        if (gameMode) {
-          document.body.classList.add('game-mode');
-        } else {
-          document.body.classList.remove('game-mode');
-        }
-      });
+      .subscribe((e: NavigationEnd) => this.syncGameMode(e.urlAfterRedirects));
   }
 
   ngOnDestroy(): void {
@@ -718,6 +720,18 @@ export class ShellComponent implements OnDestroy {
 
   closeMobileNav() {
     if (this.compactNav()) this.drawerOpen.set(false);
+  }
+
+  private syncGameMode(url: string): void {
+    const gameMode = isGameRoute(url);
+    this.inGameMode.set(gameMode);
+    this.closeMenu();
+    if (gameMode) {
+      this.drawerOpen.set(false);
+      document.body.classList.add('game-mode');
+    } else {
+      document.body.classList.remove('game-mode');
+    }
   }
 
   logout(): void {

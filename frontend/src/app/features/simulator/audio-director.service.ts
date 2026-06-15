@@ -26,6 +26,8 @@ export class AudioDirectorService {
   private sfx = new Map<SoundEffect, Howl>();
   private masterVolume = 1.0;
   private musicVolume = 0.42;
+  private musicMuted = false;
+  private sfxMuted = false;
   // Bajo a propósito: los SFX de UI acompañan, no protagonizan.
   private sfxVolume = 0.5;
   private fadeInterval?: number;
@@ -73,6 +75,7 @@ export class AudioDirectorService {
       this.sfx.set(key, new Howl({
         src: [src],
         volume: this.sfxVolume,
+        mute: this.sfxMuted,
         preload: true,
         onloaderror: (_: number, err: unknown) => console.warn(`[AudioDirector] SFX error ${src}:`, err),
       }));
@@ -124,7 +127,7 @@ export class AudioDirectorService {
   }
 
   playSfx(effect: SoundEffect): void {
-    if (!this.initialized) return;
+    if (!this.initialized || this.sfxMuted) return;
     if (this.reducedMotion && (effect === 'footstep_tile' || effect === 'footstep_wood')) return;
     this.sfx.get(effect)?.play();
   }
@@ -132,6 +135,36 @@ export class AudioDirectorService {
   setMasterVolume(v: number): void {
     this.masterVolume = Math.max(0, Math.min(1, v));
     Howler.volume(this.masterVolume);
+  }
+
+  isMusicMuted(): boolean { return this.musicMuted; }
+
+  isSfxMuted(): boolean { return this.sfxMuted; }
+
+  toggleMusicMuted(): boolean {
+    this.setMusicMuted(!this.musicMuted);
+    return this.musicMuted;
+  }
+
+  toggleSfxMuted(): boolean {
+    this.setSfxMuted(!this.sfxMuted);
+    return this.sfxMuted;
+  }
+
+  setMusicMuted(muted: boolean): void {
+    this.musicMuted = muted;
+    if (muted) {
+      this.stems.forEach(stem => {
+        stem.targetVolume = 0;
+        stem.volume = 0;
+        stem.howl.volume(0);
+      });
+    }
+  }
+
+  setSfxMuted(muted: boolean): void {
+    this.sfxMuted = muted;
+    this.sfx.forEach(howl => howl.mute(muted));
   }
 
   pause(): void { this.stems.forEach(s => s.howl.pause()); }
@@ -156,7 +189,7 @@ export class AudioDirectorService {
 
   private setTargetVolume(layer: MusicLayer, vol: number): void {
     const stem = this.stems.get(layer);
-    if (stem) stem.targetVolume = vol * this.musicVolume;
+    if (stem) stem.targetVolume = this.musicMuted ? 0 : vol * this.musicVolume;
   }
 
   private startFadeLoop(): void {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { PatientState, SimulationAttemptState } from '../../core/models/simulation.model';
@@ -60,33 +60,38 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
               role="meter"
               [attr.aria-valuenow]="game.stressIndex" aria-valuemin="0" aria-valuemax="100"
               [attr.aria-label]="'Estado de estrés del caso: ' + game.stressIndex + '%. ' + stressLabel()">
-              <div class="hud-hearts" aria-hidden="true" [style.color]="stressColor()">
-                @for (h of hearts(); track $index) {
-                  <span class="heart" [class.heart--half]="h === 'half'" [class.heart--full]="h === 'full'">
-                    <svg viewBox="0 0 24 24" class="heart-svg">
-                      <path class="heart-outline" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
-                      <path class="heart-fill" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
-                    </svg>
-                  </span>
-                }
+              <span class="hud-metric-label">Estrés</span>
+              <div class="hud-hearts-wrap" title="Estrés del caso: los corazones muestran la calma restante">
+                <div class="hud-hearts" aria-hidden="true" [style.color]="stressColor()">
+                  @for (h of hearts(); track $index) {
+                    <span class="heart" [class.heart--half]="h === 'half'" [class.heart--full]="h === 'full'">
+                      <svg viewBox="0 0 24 24" class="heart-svg">
+                        <path class="heart-outline" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
+                        <path class="heart-fill" d="M12 20.3l-1.5-1.35C5.2 14.2 2 11.3 2 7.7 2 5 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9C11.7 3.7 13.2 3 14.8 3 17.5 3 19.6 5 19.6 7.7c0 3.6-3.2 6.5-8.5 11.25L12 20.3z"/>
+                      </svg>
+                    </span>
+                  }
+                </div>
+                <span class="stress-pct" [style.color]="stressColor()" aria-hidden="true">{{ game.stressIndex }}%</span>
               </div>
-              <span class="stress-pct" [style.color]="stressColor()" aria-hidden="true">{{ game.stressIndex }}%</span>
             </div>
 
             @if (patientState(); as ps) {
               <div class="hud-patient" aria-label="Estado de la paciente">
                 <div class="patient-bars">
                   <div class="patient-bar-row">
-                    <span class="bar-icon" title="Confianza" aria-hidden="true">C</span>
-                    <div class="mini-track" role="meter" [attr.aria-valuenow]="ps.trustLevel" aria-valuemin="0" aria-valuemax="100" aria-label="Confianza">
+                    <span class="bar-label">Confianza</span>
+                    <div class="mini-track" role="meter" [attr.aria-valuenow]="ps.trustLevel" aria-valuemin="0" aria-valuemax="100" aria-label="Confianza de la paciente">
                       <span [style.width.%]="ps.trustLevel" [style.background]="trustColor(ps.trustLevel)"></span>
                     </div>
+                    <span class="bar-value">{{ ps.trustLevel }}%</span>
                   </div>
                   <div class="patient-bar-row">
-                    <span class="bar-icon" title="Bienestar emocional" aria-hidden="true">B</span>
-                    <div class="mini-track" role="meter" [attr.aria-valuenow]="ps.emotionalState" aria-valuemin="0" aria-valuemax="100" aria-label="Bienestar emocional">
+                    <span class="bar-label">Bienestar</span>
+                    <div class="mini-track" role="meter" [attr.aria-valuenow]="ps.emotionalState" aria-valuemin="0" aria-valuemax="100" aria-label="Bienestar emocional de la paciente">
                       <span [style.width.%]="ps.emotionalState" [style.background]="emotionColor(ps.emotionalState)"></span>
                     </div>
+                    <span class="bar-value">{{ ps.emotionalState }}%</span>
                   </div>
                 </div>
               </div>
@@ -104,6 +109,46 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
                 aria-label="Abrir bitácora reflexiva (J)" title="Bitácora (J)">
                 <mat-icon aria-hidden="true">menu_book</mat-icon>
               </button>
+              <button type="button" class="hud-action" [class.hud-action--active]="settingsOpen()"
+                (click)="settingsOpen.set(!settingsOpen())"
+                aria-label="Abrir ajustes del juego" title="Ajustes">
+                <mat-icon aria-hidden="true">settings</mat-icon>
+              </button>
+              @if (settingsOpen()) {
+                <div class="settings-menu" role="menu" aria-label="Ajustes del juego">
+                  <div class="settings-menu__header">
+                    <strong>Ajustes</strong>
+                    <button type="button" aria-label="Cerrar ajustes" (click)="settingsOpen.set(false)">
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                    </button>
+                  </div>
+                  <button type="button" role="menuitemcheckbox" [attr.aria-checked]="!musicMuted()" (click)="toggleMusic.emit()">
+                    <mat-icon aria-hidden="true">{{ musicMuted() ? 'music_off' : 'music_note' }}</mat-icon>
+                    <span>Música ambiental</span>
+                    <strong>{{ musicMuted() ? 'Off' : 'On' }}</strong>
+                  </button>
+                  <button type="button" role="menuitemcheckbox" [attr.aria-checked]="!sfxMuted()" (click)="toggleSfx.emit()">
+                    <mat-icon aria-hidden="true">{{ sfxMuted() ? 'volume_off' : 'graphic_eq' }}</mat-icon>
+                    <span>Sonidos de acciones</span>
+                    <strong>{{ sfxMuted() ? 'Off' : 'On' }}</strong>
+                  </button>
+                  <button type="button" role="menuitemcheckbox" [attr.aria-checked]="reduceMotion()" (click)="toggleReduceMotion.emit()">
+                    <mat-icon aria-hidden="true">motion_photos_pause</mat-icon>
+                    <span>Movimiento reducido</span>
+                    <strong>{{ reduceMotion() ? 'On' : 'Off' }}</strong>
+                  </button>
+                  <button type="button" role="menuitem" (click)="toggleJournal.emit(); settingsOpen.set(false)">
+                    <mat-icon aria-hidden="true">menu_book</mat-icon>
+                    <span>Bitácora</span>
+                    <strong>J</strong>
+                  </button>
+                  <a role="menuitem" routerLink="/portal/simulador">
+                    <mat-icon aria-hidden="true">apps</mat-icon>
+                    <span>Catálogo</span>
+                    <strong></strong>
+                  </a>
+                </div>
+              }
               <a class="hud-action" routerLink="/portal/simulador"
                 aria-label="Volver al catálogo de simulaciones" title="Volver al catálogo">
                 <mat-icon aria-hidden="true">logout</mat-icon>
@@ -138,7 +183,7 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-zone { display: flex; align-items: center; }
     .hud-zone--case { gap: 10px; min-width: 0; flex-shrink: 1; }
     .hud-zone--center { flex: 1; min-width: 0; gap: 10px; justify-content: center; }
-    .hud-zone--right { flex-shrink: 0; gap: 14px; margin-left: auto; }
+    .hud-zone--right { flex-shrink: 0; gap: 12px; margin-left: auto; }
 
     .hud-brand { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding-right: 10px; border-right: 1px solid rgba(182,156,255,.18); }
     .brand-glyph { color: #B69CFF; flex-shrink: 0; }
@@ -169,8 +214,18 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-score mat-icon { color: #B69CFF; font-size: 18px; width: 18px; height: 18px; }
     .hud-score strong { font-family: 'JetBrains Mono', monospace; font-size: .9rem; letter-spacing: .04em; }
 
-    .hud-stress { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+    .hud-stress { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
     .hud-stress--pulse { animation: stress-pulse .6s ease-out; }
+    .hud-metric-label,
+    .bar-label {
+      color: rgba(232,240,244,.68);
+      font-size: .62rem;
+      font-weight: 900;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .hud-hearts-wrap { display: flex; align-items: center; gap: 6px; }
     .hud-hearts { display: inline-flex; align-items: center; gap: 2px; }
     .heart { display: inline-block; width: 15px; height: 15px; line-height: 0; }
     .heart-svg { width: 15px; height: 15px; display: block; }
@@ -183,8 +238,9 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
 
     .hud-patient { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .patient-bars { display: flex; flex-direction: column; gap: 3px; }
-    .patient-bar-row { display: flex; align-items: center; gap: 4px; }
-    .bar-icon { width: 12px; font-size: .62rem; line-height: 1; color: rgba(232,240,244,.7); font-weight: 800; text-align: center; }
+    .patient-bar-row { display: grid; grid-template-columns: 68px 56px 34px; align-items: center; gap: 5px; }
+    .bar-label { font-size: .58rem; text-transform: none; letter-spacing: 0; }
+    .bar-value { color: rgba(232,240,244,.58); font-family: 'JetBrains Mono', monospace; font-size: .62rem; text-align: right; }
     .mini-track { width: 56px; height: 5px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
     .mini-track span { display: block; height: 100%; border-radius: inherit; transition: width .5s ease, background .5s ease; }
 
@@ -201,6 +257,7 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-step span { font-size: .68rem; font-weight: 700; color: rgba(157,192,232,.85); white-space: nowrap; }
 
     .hud-actions {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -228,6 +285,87 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-action:active { transform: translateY(1px); }
     .hud-action--active { border-color: rgba(182,156,255,.8); color: #B69CFF; background: rgba(124,77,255,.18); }
     .hud-action mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .settings-menu {
+      position: absolute;
+      top: calc(100% + 9px);
+      right: 0;
+      z-index: 80;
+      width: min(280px, calc(100vw - 24px));
+      display: grid;
+      gap: 6px;
+      padding: 10px;
+      border: 1px solid rgba(182,156,255,.32);
+      border-radius: 12px;
+      background: rgba(13,18,30,.96);
+      box-shadow: 0 18px 50px -28px rgba(124,77,255,.8);
+      backdrop-filter: blur(18px) saturate(130%);
+    }
+    .settings-menu__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 2px 6px;
+      border-bottom: 1px solid rgba(182,156,255,.16);
+      color: #e7ddff;
+      font-size: .78rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .settings-menu__header button,
+    .settings-menu button,
+    .settings-menu a {
+      color: inherit;
+      font: inherit;
+    }
+    .settings-menu__header button {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: rgba(232,240,244,.7);
+      cursor: pointer;
+    }
+    .settings-menu__header button:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .settings-menu > button,
+    .settings-menu > a {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) 34px;
+      align-items: center;
+      gap: 9px;
+      min-height: 38px;
+      padding: 7px 8px;
+      border: 1px solid rgba(182,156,255,.14);
+      border-radius: 9px;
+      background: rgba(255,255,255,.045);
+      text-align: left;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .settings-menu > button:hover,
+    .settings-menu > a:hover {
+      border-color: rgba(182,156,255,.38);
+      background: rgba(124,77,255,.12);
+    }
+    .settings-menu mat-icon { color: #B69CFF; font-size: 18px; width: 18px; height: 18px; }
+    .settings-menu span {
+      min-width: 0;
+      color: rgba(232,240,244,.84);
+      font-size: .78rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .settings-menu button strong,
+    .settings-menu a strong {
+      color: rgba(232,240,244,.55);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .68rem;
+      text-align: right;
+    }
 
     @keyframes stress-pulse {
       0%   { box-shadow: 0 0 0 0 rgba(212,160,80,.4); }
@@ -260,7 +398,14 @@ export class SimulationHudComponent {
   /** Sala física actual (world.map.title); con puertas puede diferir del nodo DAG. */
   readonly locationLabel = input('');
   readonly journalOpen = input(false);
+  readonly musicMuted = input(false);
+  readonly sfxMuted = input(false);
+  readonly reduceMotion = input(false);
+  readonly settingsOpen = signal(false);
   readonly toggleJournal = output<void>();
+  readonly toggleMusic = output<void>();
+  readonly toggleSfx = output<void>();
+  readonly toggleReduceMotion = output<void>();
 
   readonly stressTier = computed<StressTier>(() => {
     const s = this.attempt()?.stressIndex ?? 0;

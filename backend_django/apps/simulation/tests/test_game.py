@@ -183,6 +183,66 @@ def test_inadequate_decision_requires_retry_without_advancing(estudiante, case_v
     assert advanced.data["data"]["currentNode"]["key"] != node_key
 
 
+def test_risky_decision_requires_retry_without_advancing(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-RISKY")
+    c = cl(estudiante)
+    start = c.post("/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json").data["data"]
+    attempt_id, token = start["attemptId"], start["attemptToken"]
+
+    first_correct = DecisionOption.objects.filter(
+        source_node_id=start["currentNode"]["id"],
+        classification="ADEQUATE",
+    ).first()
+    assert first_correct is not None
+    current = c.post(
+        f"/api/simulation/attempts/{attempt_id}/decisions",
+        {"attemptToken": token, "decisionOptionId": first_correct.id},
+        format="json",
+    ).data["data"]
+
+    node_id = current["currentNode"]["id"]
+    node_key = current["currentNode"]["key"]
+    initial_score = current["accumulatedScore"]
+    initial_stress = current["stressIndex"]
+
+    risky = DecisionOption.objects.filter(
+        source_node_id=node_id,
+        classification="RISKY",
+    ).first()
+    assert risky is not None
+
+    retry = c.post(
+        f"/api/simulation/attempts/{attempt_id}/decisions",
+        {"attemptToken": token, "decisionOptionId": risky.id},
+        format="json",
+    )
+    assert retry.status_code == 200
+    retry_state = retry.data["data"]
+    assert retry_state["status"] == "IN_PROGRESS"
+    assert retry_state["currentNode"]["key"] == node_key
+    assert retry_state["accumulatedScore"] == initial_score
+    assert retry_state["stressIndex"] == initial_stress
+    assert "volver a responder" in retry_state["feedback"]["message"]
+    assert AttemptEvent.objects.filter(
+        attempt_id=attempt_id,
+        event_type="DECISION_RETRY_REQUIRED",
+        decision_option_id=risky.id,
+    ).exists()
+
+    correct = DecisionOption.objects.filter(
+        source_node_id=node_id,
+        classification="ADEQUATE",
+    ).first()
+    assert correct is not None
+    advanced = c.post(
+        f"/api/simulation/attempts/{attempt_id}/decisions",
+        {"attemptToken": token, "decisionOptionId": correct.id},
+        format="json",
+    )
+    assert advanced.status_code == 200
+    assert advanced.data["data"]["currentNode"]["key"] != node_key
+
+
 def test_wrong_token_404(estudiante, case_version_id):
     assign_case_to_student(estudiante, case_version_id, "SIM-WRONG")
     c = cl(estudiante)
