@@ -24,6 +24,7 @@ interface StemTrack {
 export class AudioDirectorService {
   private stems = new Map<MusicLayer, StemTrack>();
   private sfx = new Map<SoundEffect, Howl>();
+  private introLament?: Howl;
   private masterVolume = 1.0;
   private musicVolume = 0.42;
   private musicMuted = false;
@@ -82,6 +83,31 @@ export class AudioDirectorService {
     }
 
     this.startFadeLoop();
+  }
+
+  playIntroLament(): void {
+    if (!this.initialized || this.musicMuted) return;
+    this.stems.forEach(stem => {
+      stem.targetVolume = 0;
+      stem.volume = 0;
+      stem.howl.volume(0);
+      stem.howl.pause();
+    });
+    if (!this.introLament) {
+      this.introLament = new Howl({
+        src: ['assets/game/audio/PsicoLament.mp3'],
+        loop: true,
+        volume: this.musicVolume,
+        preload: true,
+        onloaderror: (_: number, err: unknown) => console.warn('[AudioDirector] No se pudo cargar PsicoLament:', err),
+      });
+    }
+    this.introLament.volume(this.musicMuted ? 0 : this.musicVolume);
+    if (!this.introLament.playing()) this.introLament.play();
+  }
+
+  stopIntroLament(): void {
+    this.introLament?.stop();
   }
 
   setStressLevel(stress: number): void {
@@ -174,12 +200,15 @@ export class AudioDirectorService {
   }
 
   stopAll(): void {
+    this.introLament?.stop();
     this.stems.forEach(s => s.howl.stop());
     if (this.fadeInterval) clearInterval(this.fadeInterval);
   }
 
   dispose(): void {
     this.stopAll();
+    this.introLament?.unload();
+    this.introLament = undefined;
     this.stems.forEach(s => s.howl.unload());
     this.sfx.forEach(h => h.unload());
     this.stems.clear();

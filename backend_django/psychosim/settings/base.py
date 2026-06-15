@@ -100,6 +100,7 @@ JWT_SECRET = os.environ.get(
     "psychosim-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256",
 )
 REFLECTION_ENCRYPTION_KEY = os.environ.get("REFLECTION_ENCRYPTION_KEY", JWT_SECRET)
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "PsychoSim / SIEP API",

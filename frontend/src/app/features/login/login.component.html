@@ -84,8 +84,11 @@
             @if (loading()) {
               <mat-progress-bar mode="indeterminate" aria-label="Iniciando sesión"></mat-progress-bar>
             }
+            @if (googleLoading()) {
+              <mat-progress-bar mode="indeterminate" aria-label="Iniciando sesión con Google"></mat-progress-bar>
+            }
 
-            <button class="siep-login__submit" type="submit" [disabled]="form.invalid || loading()">
+            <button class="siep-login__submit" type="submit" [disabled]="form.invalid || loading() || googleLoading()">
               <mat-icon aria-hidden="true">login</mat-icon>
               Ingresar al sistema
             </button>
@@ -94,14 +97,19 @@
           <p class="siep-login__sso-divider" aria-hidden="true">o continúa con</p>
 
           <div class="siep-login__sso" aria-label="Accesos SSO institucionales">
-            <button
-              class="siep-login__sso-btn siep-login__sso-btn--google"
-              type="button"
-              aria-label="Continuar con Google"
-              (click)="onGoogleSso()"
-            >
-              <span class="siep-login__sso-fallback">Google</span>
-            </button>
+            <div class="siep-login__google-slot">
+              <div #googleButton class="siep-login__google-button" aria-label="Continuar con Google"></div>
+              @if (!googleConfigured()) {
+                <button
+                  class="siep-login__sso-btn siep-login__sso-btn--google"
+                  type="button"
+                  aria-label="Continuar con Google"
+                  (click)="onGoogleSso()"
+                >
+                  <span class="siep-login__sso-fallback">Google</span>
+                </button>
+              }
+            </div>
             <button
               class="siep-login__sso-btn siep-login__sso-btn--microsoft"
               type="button"

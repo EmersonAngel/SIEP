@@ -403,6 +403,25 @@
   gap: 10px;
 }
 
+.siep-login__google-slot {
+  min-width: 0;
+  min-height: 46px;
+}
+
+.siep-login__google-button {
+  width: 100%;
+  min-height: 46px;
+  overflow: hidden;
+}
+
+.siep-login__google-button:empty {
+  display: none;
+}
+
+.siep-login__google-slot .siep-login__sso-btn {
+  width: 100%;
+}
+
 .siep-login__sso-btn {
   display: grid;
   place-items: center;

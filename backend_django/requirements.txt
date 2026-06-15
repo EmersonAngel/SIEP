@@ -8,6 +8,7 @@ psycopg2-binary==2.9.10
 cryptography==43.0.3
 drf-spectacular==0.27.2
 bcrypt==4.2.0
+google-auth==2.40.3
 # Dev/test
 pytest==8.3.3
 pytest-django==4.8.0

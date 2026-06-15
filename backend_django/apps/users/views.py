@@ -1,5 +1,8 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
@@ -11,13 +14,38 @@ from .serializers import (
     AdminUserStatusSerializer,
     AdminUserSerializer,
     AdminUserWriteSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     RegisterSerializer,
     UserSummarySerializer,
     generate_access_token,
+    normalize_email_value,
 )
 
 User = get_user_model()
+
+
+class GoogleAuthenticationError(APIException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = "No fue posible iniciar sesiÃ³n con Google"
+    default_code = "google_auth_failed"
+
+
+def verify_google_credential(credential, audience):
+    try:
+        from google.auth.transport import requests
+        from google.oauth2 import id_token
+    except ImportError as exc:
+        raise ValidationError("El proveedor de Google no estÃ¡ instalado en el backend") from exc
+
+    try:
+        return id_token.verify_oauth2_token(
+            credential,
+            requests.Request(),
+            audience,
+        )
+    except ValueError as exc:
+        raise GoogleAuthenticationError("No fue posible validar la cuenta de Google") from exc
 
 
 class LoginView(APIView):
@@ -35,6 +63,43 @@ class LoginView(APIView):
         if not user or not user.activo or not user.check_password(password):
             # 401 "Credenciales inválidas" (Spring BadCredentialsException)
             raise AuthenticationFailed("Credenciales inválidas")
+
+        return api_ok({
+            "token": generate_access_token(user),
+            "user": UserSummarySerializer(user).data,
+        })
+
+
+class GoogleLoginView(APIView):
+    """POST /api/auth/google - public Google Identity Services login."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        if not client_id:
+            raise ValidationError("El inicio de sesiÃ³n con Google no estÃ¡ configurado")
+
+        ser = GoogleLoginSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        payload = verify_google_credential(ser.validated_data["credential"], client_id)
+
+        if not payload.get("email_verified"):
+            raise GoogleAuthenticationError("La cuenta de Google no tiene el correo verificado")
+
+        email = normalize_email_value(payload.get("email", ""))
+        if not email:
+            raise GoogleAuthenticationError("La cuenta de Google no entregÃ³ un correo vÃ¡lido")
+
+        try:
+            user = User.objects.filter(email=email).first()
+        except Exception as exc:
+            raise GoogleAuthenticationError(
+                "La cuenta de Google no estÃ¡ asociada a un usuario activo"
+            ) from exc
+
+        if not user or not user.activo:
+            raise GoogleAuthenticationError("La cuenta de Google no estÃ¡ asociada a un usuario activo")
 
         return api_ok({
             "token": generate_access_token(user),

@@ -117,6 +117,10 @@ class LoginSerializer(serializers.Serializer):
         return normalize_email_value(value)
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    credential = serializers.CharField(write_only=True)
+
+
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)

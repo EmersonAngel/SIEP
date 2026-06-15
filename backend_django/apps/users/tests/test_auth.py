@@ -1,7 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
+from unittest.mock import patch
 
 User = get_user_model()
 
@@ -248,6 +250,53 @@ def test_login_normalizes_email_whitespace_and_case(client, admin_user):
 
     assert login.status_code == 200
     assert login.data["data"]["user"]["email"] == user.email
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id.apps.googleusercontent.com")
+def test_google_login_returns_token_for_existing_active_user(client, admin_user):
+    with patch(
+        "apps.users.views.verify_google_credential",
+        return_value={"email": admin_user.email.upper(), "email_verified": True, "sub": "google-sub"},
+    ) as verifier:
+        resp = client.post("/api/auth/google", {"credential": "valid-id-token"}, format="json")
+
+    assert resp.status_code == 200
+    verifier.assert_called_once_with("valid-id-token", "google-client-id.apps.googleusercontent.com")
+    assert resp.data["data"]["user"]["email"] == admin_user.email
+    decoded = AccessToken(resp.data["data"]["token"])
+    assert decoded["role"] == "ADMIN"
+    assert decoded["sub"] == admin_user.email
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id.apps.googleusercontent.com")
+def test_google_login_rejects_unknown_user(client):
+    with patch(
+        "apps.users.views.verify_google_credential",
+        return_value={"email": "sin_registro@x.com", "email_verified": True, "sub": "google-sub"},
+    ):
+        resp = client.post("/api/auth/google", {"credential": "valid-id-token"}, format="json")
+
+    assert resp.status_code == 401
+    assert "asociada" in resp.data["message"]
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_ID="google-client-id.apps.googleusercontent.com")
+def test_google_login_rejects_unverified_email(client, admin_user):
+    with patch(
+        "apps.users.views.verify_google_credential",
+        return_value={"email": admin_user.email, "email_verified": False, "sub": "google-sub"},
+    ):
+        resp = client.post("/api/auth/google", {"credential": "valid-id-token"}, format="json")
+
+    assert resp.status_code == 401
+    assert "verificado" in resp.data["message"]
+
+
+def test_google_login_requires_backend_client_id(client):
+    resp = client.post("/api/auth/google", {"credential": "valid-id-token"}, format="json")
+
+    assert resp.status_code == 400
+    assert "Google" in resp.data["message"]
 
 
 def test_admin_users_endpoint_updates_user_and_optional_password(client, admin_user):
