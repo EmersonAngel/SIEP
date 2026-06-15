@@ -1,0 +1,60 @@
+{
+  "frameSize": {
+    "width": 64,
+    "height": 96
+  },
+  "sheetSize": {
+    "width": 192,
+    "height": 288
+  },
+  "grid": {
+    "columns": 3,
+    "rows": 3
+  },
+  "frames": [
+    "idle_down",
+    "walk_down_1",
+    "walk_down_2",
+    "idle_side",
+    "walk_side_1",
+    "walk_side_2",
+    "idle_up",
+    "walk_up_1",
+    "walk_up_2"
+  ],
+  "genders": [
+    "female",
+    "male"
+  ],
+  "clothingColors": [
+    "purple",
+    "blue",
+    "green",
+    "burgundy",
+    "gray"
+  ],
+  "hairShapes": [
+    "short",
+    "long",
+    "tied",
+    "medium"
+  ],
+  "hairColors": [
+    "black",
+    "brown",
+    "blonde",
+    "red",
+    "gray"
+  ],
+  "faces": [
+    "neutral",
+    "calm",
+    "worried"
+  ],
+  "layerOrder": [
+    "hair_back",
+    "body",
+    "face",
+    "hair_front"
+  ]
+}

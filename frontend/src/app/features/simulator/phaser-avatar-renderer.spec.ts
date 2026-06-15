@@ -18,11 +18,11 @@ import {
 } from './phaser-avatar-renderer';
 
 describe('phaser-avatar-renderer', () => {
-  it('expone las capas del avatar con su tipo para la composición por fila', () => {
+  it('expone las capas del avatar con su tipo para la composicion por fila', () => {
     const specs = avatarLayerSpecs(defaultAvatar());
     expect(specs.map(s => s.textureKey)).toEqual([
       'avatar-layer-hair-back-short-black',
-      'avatar-layer-body',
+      'avatar-layer-body-female-purple',
       'avatar-layer-face-neutral',
       'avatar-layer-hair-front-short-black',
     ]);
@@ -32,7 +32,7 @@ describe('phaser-avatar-renderer', () => {
     }
   });
 
-  it('de frente/lado el pelo trasero va DETRÁS del cuerpo; de espaldas, encima', () => {
+  it('de frente/lado el pelo trasero va detras del cuerpo; de espaldas, encima', () => {
     expect(avatarRowLayerOrder(0)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
     expect(avatarRowLayerOrder(1)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
     expect(avatarRowLayerOrder(2)).toEqual(['body', 'hairBack', 'hairFront']);
@@ -41,20 +41,20 @@ describe('phaser-avatar-renderer', () => {
   it('omite las capas de pelo cuando el estilo es "ninguno"', () => {
     const specs = avatarLayerSpecs({ ...defaultAvatar(), hairStyle: 'ninguno' });
     expect(specs.map(s => s.textureKey)).toEqual([
-      'avatar-layer-body',
+      'avatar-layer-body-female-purple',
       'avatar-layer-face-neutral',
     ]);
   });
 
-  it('precarga las variantes de pelo promovidas en fase C', () => {
-    const specs = avatarLayerSpecs({ ...defaultAvatar(), hairStyle: 'recogido' });
+  it('precarga variantes combinables de pelo', () => {
+    const specs = avatarLayerSpecs({ ...defaultAvatar(), hairStyle: 'recogido', hairColor: 'gris' });
     expect(specs.map(s => s.assetPath)).toEqual(expect.arrayContaining([
-      '/assets/characters/modular/hair/hair_tied_brown_back.png',
-      '/assets/characters/modular/hair/hair_tied_brown_front.png',
+      '/assets/characters/modular/hair/hair_tied_gray_back.png',
+      '/assets/characters/modular/hair/hair_tied_gray_front.png',
     ]));
   });
 
-  it('genera 9 frames de 64×96 que cubren exactamente la hoja de 192×288', () => {
+  it('genera 9 frames de 64x96 que cubren exactamente la hoja de 192x288', () => {
     const rects = avatarFrameRects();
     expect(rects).toHaveLength(9);
     expect(rects[0]).toEqual({ index: 0, x: 0, y: 0, width: AVATAR_FRAME_WIDTH, height: AVATAR_FRAME_HEIGHT });
@@ -67,11 +67,11 @@ describe('phaser-avatar-renderer', () => {
     });
   });
 
-  it('las animaciones usan la fila correcta y el idle es la columna central', () => {
+  it('las animaciones usan la fila correcta y el idle es la primera columna', () => {
     expect(AVATAR_WALK_FRAMES.down).toEqual([0, 1, 2]);
     expect(AVATAR_WALK_FRAMES.side).toEqual([3, 4, 5]);
     expect(AVATAR_WALK_FRAMES.up).toEqual([6, 7, 8]);
-    expect(AVATAR_IDLE_FRAMES).toEqual({ down: 1, side: 4, up: 7 });
+    expect(AVATAR_IDLE_FRAMES).toEqual({ down: 0, side: 3, up: 6 });
   });
 
   it('voltea el avatar modular solo cuando mira a la izquierda', () => {
@@ -81,7 +81,7 @@ describe('phaser-avatar-renderer', () => {
     expect(modularAvatarFlipX('up')).toBe(false);
   });
 
-  describe('texturas/animaciones de NPC modular (fase competitiva)', () => {
+  describe('texturas/animaciones de NPC modular', () => {
     it('dos presets distintos producen texture keys distintas y ninguna pisa la del jugador', () => {
       const madre = npcAvatarTextureKey('madre-vbg');
       const colega = npcAvatarTextureKey('colega-clinica');
@@ -107,9 +107,7 @@ describe('phaser-avatar-renderer', () => {
     });
   });
 
-  it('mantiene la escala de render en el rango legible del MVP (fase 1.1)', () => {
-    // 0.6 dejaba al protagonista ilegible; por debajo de 0.72 vuelve a pasar,
-    // por encima de 0.85 desproporciona frente a los NPC de la sala autoría.
+  it('mantiene la escala de render en el rango legible del MVP', () => {
     expect(AVATAR_DISPLAY_SCALE).toBeGreaterThanOrEqual(0.72);
     expect(AVATAR_DISPLAY_SCALE).toBeLessThanOrEqual(0.85);
   });

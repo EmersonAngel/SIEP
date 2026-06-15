@@ -30,7 +30,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import Konva from 'konva';
-import { AvatarConfig, EYES, HairVariantId, MOUTHS } from '../../character/avatar.model';
+import { AvatarConfig, CLOTHING_COLORS, EYES, GENDER_OPTIONS, HairVariantId, MOUTHS } from '../../character/avatar.model';
 import { AvatarFigureComponent } from '../../character/avatar-figure.component';
 import { coerceAvatar, defaultAvatar, hairVariantId, hairVariantPatch } from '../../character/avatar-config.util';
 
@@ -290,9 +290,16 @@ const OBJECT_COLORS: Record<string, string> = {
                   </div>
                   <label><span>Genero</span>
                     <select [ngModel]="npcGender(obj)" (ngModelChange)="setNpcGender(obj.key, $event)">
-                      <option value="female">Mujer</option>
-                      <option value="male">Hombre</option>
-                      <option value="neutral">Neutral</option>
+                      @for (gender of genderOptions; track gender.id) {
+                        <option [value]="gender.id">{{ gender.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label><span>Ropa</span>
+                    <select [ngModel]="npcAvatar(obj).clothingColor" (ngModelChange)="setNpcAvatarField(obj.key, 'clothingColor', $event)">
+                      @for (color of clothingColors; track color.id) {
+                        <option [value]="color.id">{{ color.label }}</option>
+                      }
                     </select>
                   </label>
                   <label><span>Plantilla</span>
@@ -827,6 +834,8 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
   readonly objectTemplates = AUTHORING_OBJECT_TEMPLATES;
   readonly npcTemplates = AUTHORING_NPC_TEMPLATES;
   readonly hairVariants = AUTHORING_HAIR_VARIANTS;
+  readonly genderOptions = GENDER_OPTIONS;
+  readonly clothingColors = CLOTHING_COLORS;
   readonly mouthOptions = MOUTHS;
   readonly eyeOptions = EYES;
 
@@ -952,7 +961,7 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
 
   npcGender(obj: WorldObject): string {
     const gender = (obj.metadata as { gender?: unknown } | undefined)?.gender;
-    return gender === 'male' || gender === 'neutral' ? gender : 'female';
+    return gender === 'male' ? gender : 'female';
   }
 
   npcTemplateId(obj: WorldObject): string {
@@ -972,8 +981,14 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
-  setNpcGender(key: string, gender: 'female' | 'male' | 'neutral'): void {
-    this.updateNpcMetadata(key, { gender });
+  setNpcGender(key: string, gender: 'female' | 'male'): void {
+    const obj = this.store.selectedObject();
+    if (!obj) return;
+    this.updateNpcMetadata(key, {
+      gender,
+      npcTemplateId: '',
+      avatar: { ...this.npcAvatar(obj), gender },
+    });
   }
 
   applyNpcTemplate(key: string, templateId: string): void {

@@ -34,8 +34,8 @@ export const AVATAR_ANIM_KEYS = {
   up: 'avatar-walk-up',
 } as const;
 
-/** Frame de reposo por dirección (columna central de cada fila). */
-export const AVATAR_IDLE_FRAMES = { down: 1, side: 4, up: 7 } as const;
+/** Frame de reposo por direccion (primera columna de cada fila, segun manifest). */
+export const AVATAR_IDLE_FRAMES = { down: 0, side: 3, up: 6 } as const;
 
 /** Frames de caminata por dirección (fila completa). */
 export const AVATAR_WALK_FRAMES = {

@@ -16,47 +16,56 @@ import { NpcAvatarPresetKey } from '../../core/models/simulation.model';
  */
 export const NPC_AVATAR_PRESETS: Record<NpcAvatarPresetKey, AvatarConfig> = {
   'madre-vbg': {
+    gender: 'female', clothingColor: 'burgundy',
     skinTone: 'media', hairStyle: 'largo', hairColor: 'castano', fringe: false,
     eyes: 'amables', brows: 'suaves', mouth: 'seria', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'paciente-vbg': {
+    gender: 'female', clothingColor: 'gray',
     skinTone: 'clara', hairStyle: 'largo', hairColor: 'castano', fringe: false,
     eyes: 'neutros', brows: 'marcadas', mouth: 'seria', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'colega-clinica': {
+    gender: 'female', clothingColor: 'green',
     skinTone: 'morena', hairStyle: 'recogido', hairColor: 'castano', fringe: false,
     eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'pin',
     uniform: 'sin-bata',
   },
   'supervisor-clinico': {
+    gender: 'male', clothingColor: 'blue',
     skinTone: 'media', hairStyle: 'corto', hairColor: 'negro', fringe: false,
     eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'seguridad': {
+    gender: 'male', clothingColor: 'gray',
     skinTone: 'morena', hairStyle: 'corto', hairColor: 'negro', fringe: false,
     eyes: 'neutros', brows: 'marcadas', mouth: 'neutra', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'adolescente-nna': {
+    gender: 'female', clothingColor: 'purple',
     skinTone: 'clara', hairStyle: 'medio', hairColor: 'rojizo', fringe: false,
     eyes: 'neutros', brows: 'suaves', mouth: 'seria', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   // ── Caso PDF (hospital + comisaría) ──
   'psicologa-hospitalaria': {
+    gender: 'female', clothingColor: 'green',
     skinTone: 'media', hairStyle: 'recogido', hairColor: 'castano', fringe: false,
     eyes: 'amables', brows: 'suaves', mouth: 'neutra', accessory: 'pin',
     uniform: 'sin-bata',
   },
   'funcionaria-recepcion': {
+    gender: 'female', clothingColor: 'blue',
     skinTone: 'clara', hairStyle: 'medio', hairColor: 'rojizo', fringe: false,
     eyes: 'neutros', brows: 'rectas', mouth: 'neutra', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'comisaria-profesional': {
+    gender: 'female', clothingColor: 'purple',
     skinTone: 'morena', hairStyle: 'corto', hairColor: 'negro', fringe: false,
     eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'pin',
     uniform: 'sin-bata',
