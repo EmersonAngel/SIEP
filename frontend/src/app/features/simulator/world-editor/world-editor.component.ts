@@ -30,6 +30,9 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import Konva from 'konva';
+import { AvatarConfig, EYES, HairVariantId, MOUTHS } from '../../character/avatar.model';
+import { AvatarFigureComponent } from '../../character/avatar-figure.component';
+import { coerceAvatar, defaultAvatar, hairVariantId, hairVariantPatch } from '../../character/avatar-config.util';
 
 import {
   WorldEditorStore,
@@ -44,7 +47,8 @@ import {
   UpdateSpawnCommand,
   UpsertDialogueCommand,
   DeleteDialogueCommand,
-  SetMapAmbientCommand
+  SetMapAmbientCommand,
+  SetMapFieldsCommand
 } from './world-editor.store';
 import {
   WorldObject,
@@ -63,6 +67,16 @@ import {
   doorTarget, setDoorTarget, doorEntry, setDoorEntry,
   cameraZoom, setCameraZoom, backgroundImage, setBackgroundImage
 } from './room-edit.util';
+import {
+  AUTHORING_HAIR_VARIANTS,
+  AUTHORING_NPC_TEMPLATES,
+  AUTHORING_OBJECT_TEMPLATES,
+  AUTHORING_SCENE_TEMPLATES,
+  applySceneTemplate,
+  buildObjectFromTemplate,
+  objectTemplateById,
+  selectedSceneTemplateId,
+} from '../authoring-catalog.config';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -85,7 +99,7 @@ const OBJECT_COLORS: Record<string, string> = {
 @Component({
   selector: 'app-world-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatProgressBarModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatProgressBarModule, AvatarFigureComponent],
   providers: [WorldEditorStore],
   template: `
     <div class="we-root">
@@ -150,6 +164,26 @@ const OBJECT_COLORS: Record<string, string> = {
           </span>
         </div>
       </header>
+
+      <section class="we-library liquid-glass" aria-label="Biblioteca de autoria">
+        <div class="we-library-group">
+          <span>Escenario</span>
+          <select [ngModel]="selectedSceneTemplate()" (ngModelChange)="applyScenePreset($event)">
+            <option value="">Personalizado</option>
+            @for (scene of sceneTemplates; track scene.id) {
+              <option [value]="scene.id">{{ scene.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="we-library-actions">
+          @for (template of objectTemplates; track template.id) {
+            <button class="we-template-btn" type="button" (click)="addTemplate(template.id)">
+              <mat-icon>{{ template.icon }}</mat-icon>
+              <span>{{ template.label }}</span>
+            </button>
+          }
+        </div>
+      </section>
 
       @if (store.loading()) {
         <mat-progress-bar mode="indeterminate" />
@@ -245,6 +279,55 @@ const OBJECT_COLORS: Record<string, string> = {
                 <input type="checkbox" [ngModel]="obj.visible" (ngModelChange)="updateObjectField(obj.key, 'visible', $event)" />
                 <span>Visible</span>
               </label>
+              @if (obj.type === 'PERSON') {
+                <div class="we-npc-kit">
+                  <div class="we-npc-head">
+                    <h4>NPC</h4>
+                    <div class="we-npc-preview" aria-hidden="true">
+                      <app-avatar-figure [config]="npcAvatar(obj)" pose="front" />
+                      <app-avatar-figure [config]="npcAvatar(obj)" pose="side" />
+                    </div>
+                  </div>
+                  <label><span>Genero</span>
+                    <select [ngModel]="npcGender(obj)" (ngModelChange)="setNpcGender(obj.key, $event)">
+                      <option value="female">Mujer</option>
+                      <option value="male">Hombre</option>
+                      <option value="neutral">Neutral</option>
+                    </select>
+                  </label>
+                  <label><span>Plantilla</span>
+                    <select [ngModel]="npcTemplateId(obj)" (ngModelChange)="applyNpcTemplate(obj.key, $event)">
+                      <option value="">Personalizado</option>
+                      @for (tpl of npcTemplates; track tpl.id) {
+                        <option [value]="tpl.id">{{ tpl.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label><span>Pelo</span>
+                    <select [ngModel]="npcHairVariant(obj)" (ngModelChange)="setNpcHair(obj.key, $event)">
+                      @for (hair of hairVariants; track hair.id) {
+                        <option [value]="hair.id">{{ hair.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <div class="we-form-row">
+                    <label><span>Cara</span>
+                      <select [ngModel]="npcAvatar(obj).mouth" (ngModelChange)="setNpcAvatarField(obj.key, 'mouth', $event)">
+                        @for (mouth of mouthOptions; track mouth.id) {
+                          <option [value]="mouth.id">{{ mouth.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label><span>Ojos</span>
+                      <select [ngModel]="npcAvatar(obj).eyes" (ngModelChange)="setNpcAvatarField(obj.key, 'eyes', $event)">
+                        @for (eyes of eyeOptions; track eyes.id) {
+                          <option [value]="eyes.id">{{ eyes.label }}</option>
+                        }
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              }
               <button class="psy-button psy-button--ghost we-delete-btn" (click)="deleteSelected()" type="button">
                 <mat-icon>delete_outline</mat-icon>Eliminar objeto
               </button>
@@ -293,6 +376,25 @@ const OBJECT_COLORS: Record<string, string> = {
                       }
                     </select>
                     <button class="we-del" (click)="removeChoice($index)" type="button"><mat-icon>close</mat-icon></button>
+                    <div class="we-choice-reqs">
+                      <label><span>Herramienta obligatoria</span>
+                        <select [ngModel]="choice.requiredToolCode" (ngModelChange)="setChoiceRequiredTool($index, $event)">
+                          <option [ngValue]="null">Sin requisito</option>
+                          @for (tool of store.definition()?.clinicalTools ?? []; track tool.code) {
+                            <option [value]="tool.code">{{ tool.code }} - {{ tool.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label><span>Debe hablar con NPCs</span>
+                        <input [ngModel]="choiceEvidenceList(choice, 'requiresNpcs')" (ngModelChange)="setChoiceEvidenceList($index, 'requiresNpcs', $event)" placeholder="enfermera, testigo" />
+                      </label>
+                      <label><span>Debe revisar objetos</span>
+                        <input [ngModel]="choiceEvidenceList(choice, 'requiresInspected')" (ngModelChange)="setChoiceEvidenceList($index, 'requiresInspected', $event)" placeholder="historia-clinica" />
+                      </label>
+                      <label><span>Debe tener/usar herramientas</span>
+                        <input [ngModel]="choiceEvidenceList(choice, 'requiresTools')" (ngModelChange)="setChoiceEvidenceList($index, 'requiresTools', $event)" placeholder="PAP, RISK_METER" />
+                      </label>
+                    </div>
                   </div>
                 }
               } @else {
@@ -473,6 +575,63 @@ const OBJECT_COLORS: Record<string, string> = {
       width: 100%;
       padding-top: 4px;
     }
+    .we-library {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+    }
+    .we-library-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: min(100%, 280px);
+    }
+    .we-library-group span {
+      color: var(--psy-blue-deep);
+      font-size: .78rem;
+      font-weight: 800;
+    }
+    .we-library select {
+      min-height: 34px;
+      border: 1px solid rgba(79,124,172,.18);
+      border-radius: 8px;
+      background: rgba(255,255,255,.82);
+      color: var(--psy-ink);
+      font: inherit;
+      font-size: .82rem;
+      padding: 5px 8px;
+    }
+    .we-library-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .we-template-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      padding: 6px 9px;
+      border: 1px solid rgba(79,124,172,.18);
+      border-radius: 8px;
+      background: rgba(255,255,255,.78);
+      color: var(--psy-blue-deep);
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .we-template-btn mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+    .we-template-btn:hover {
+      background: rgba(79,124,172,.1);
+    }
     .we-badge {
       display: inline-flex;
       align-items: center;
@@ -619,9 +778,32 @@ const OBJECT_COLORS: Record<string, string> = {
     .we-sub-title { font-weight: 700; color: var(--psy-blue-deep); font-size: .82rem; }
     .we-row, .we-choice { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
     .we-choice { grid-template-columns: 1fr 1fr auto; }
+    .we-choice-reqs {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid rgba(79,124,172,.12);
+      border-radius: 10px;
+      background: rgba(79,124,172,.05);
+    }
+    .we-choice-reqs label {
+      display: grid;
+      gap: 3px;
+      font-size: .78rem;
+    }
+    .we-choice-reqs label > span {
+      color: var(--psy-blue-deep);
+      font-weight: 800;
+    }
     .we-add, .we-del { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--psy-border); border-radius: 8px; background: transparent; cursor: pointer; color: var(--psy-muted); }
     .we-add:hover, .we-del:hover { background: rgba(79,124,172,.08); color: var(--psy-blue-deep); }
     .we-choice select, .we-row input, .we-choice input { padding: 5px 8px; border: 1px solid rgba(79,124,172,.18); border-radius: 8px; background: rgba(255,255,255,.8); font: inherit; font-size: .82rem; }
+    .we-npc-kit { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(79,124,172,.14); border-radius: 12px; background: rgba(255,255,255,.52); }
+    .we-npc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .we-npc-head h4 { margin: 0; font-size: .96rem; }
+    .we-npc-preview { display: flex; align-items: center; gap: 4px; }
+    .we-npc-preview app-avatar-figure { width: 36px; height: 54px; }
     .we-movement { display: grid; gap: 8px; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--psy-border); }
     .we-movement h4 { margin: 0; font-size: 1.05rem; color: var(--psy-ink); }
     .we-wp-row { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 6px; align-items: center; }
@@ -641,6 +823,12 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
 
   readonly caseVersionId = input.required<number>();
   readonly nodeId = input<number>();
+  readonly sceneTemplates = AUTHORING_SCENE_TEMPLATES;
+  readonly objectTemplates = AUTHORING_OBJECT_TEMPLATES;
+  readonly npcTemplates = AUTHORING_NPC_TEMPLATES;
+  readonly hairVariants = AUTHORING_HAIR_VARIANTS;
+  readonly mouthOptions = MOUTHS;
+  readonly eyeOptions = EYES;
 
   @ViewChild('konvaHost', { static: false }) konvaHost!: ElementRef<HTMLDivElement>;
   @ViewChild('canvasWrap', { static: false }) canvasWrap!: ElementRef<HTMLDivElement>;
@@ -730,8 +918,88 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
 
   // ─── Inspector actions ────────────────────────────────────────────────
 
+  selectedSceneTemplate(): string {
+    return selectedSceneTemplateId(this.store.editorState()?.map);
+  }
+
+  applyScenePreset(templateId: string): void {
+    const state = this.store.editorState();
+    const template = this.sceneTemplates.find(t => t.id === templateId);
+    if (!state || !template) return;
+    this.store.execute(new SetMapFieldsCommand(applySceneTemplate(state.map, template)));
+  }
+
+  addTemplate(templateId: string): void {
+    const state = this.store.editorState();
+    const template = objectTemplateById(templateId);
+    if (!state || !template) return;
+    const offset = state.objects.length * 8;
+    const x = this.snapToGrid(Math.min(state.map.width - 64, state.map.spawnX + 64 + offset));
+    const y = this.snapToGrid(Math.min(state.map.height - 64, state.map.spawnY + offset));
+    const keyPrefix = template.type === 'PERSON' ? 'npc' : template.id;
+    const obj = buildObjectFromTemplate(template, this.store.generateKey(keyPrefix), x, y, this.store.nextLocalId());
+    this.store.execute(new PlaceObjectCommand(obj));
+    this.store.select(obj.key);
+  }
+
   updateObjectField(key: string, field: string, value: unknown): void {
     this.store.execute(new UpdateInspectorCommand(key, { [field]: value } as Partial<WorldObject>));
+  }
+
+  npcAvatar(obj: WorldObject): AvatarConfig {
+    return coerceAvatar((obj.metadata as { avatar?: unknown } | undefined)?.avatar ?? defaultAvatar());
+  }
+
+  npcGender(obj: WorldObject): string {
+    const gender = (obj.metadata as { gender?: unknown } | undefined)?.gender;
+    return gender === 'male' || gender === 'neutral' ? gender : 'female';
+  }
+
+  npcTemplateId(obj: WorldObject): string {
+    const id = (obj.metadata as { npcTemplateId?: unknown } | undefined)?.npcTemplateId;
+    return typeof id === 'string' ? id : '';
+  }
+
+  npcHairVariant(obj: WorldObject): string {
+    return hairVariantId(this.npcAvatar(obj));
+  }
+
+  private updateNpcMetadata(key: string, updates: Record<string, unknown>): void {
+    const obj = this.store.selectedObject();
+    if (!obj) return;
+    this.store.execute(new UpdateInspectorCommand(key, {
+      metadata: { ...(obj.metadata ?? {}), ...updates },
+    }));
+  }
+
+  setNpcGender(key: string, gender: 'female' | 'male' | 'neutral'): void {
+    this.updateNpcMetadata(key, { gender });
+  }
+
+  applyNpcTemplate(key: string, templateId: string): void {
+    const template = this.npcTemplates.find(t => t.id === templateId);
+    if (!template) return;
+    this.updateNpcMetadata(key, {
+      gender: template.gender,
+      npcTemplateId: template.id,
+      avatar: template.avatar,
+    });
+  }
+
+  setNpcHair(key: string, variant: string): void {
+    const obj = this.store.selectedObject();
+    if (!obj) return;
+    const avatar = { ...this.npcAvatar(obj), ...hairVariantPatch(variant as HairVariantId) };
+    this.updateNpcMetadata(key, { npcTemplateId: '', avatar });
+  }
+
+  setNpcAvatarField(key: string, field: keyof AvatarConfig, value: string): void {
+    const obj = this.store.selectedObject();
+    if (!obj) return;
+    this.updateNpcMetadata(key, {
+      npcTemplateId: '',
+      avatar: { ...this.npcAvatar(obj), [field]: value },
+    });
   }
 
   updateZoneLabel(key: string, label: string): void {
@@ -853,6 +1121,33 @@ export class WorldEditorComponent implements OnInit, OnDestroy {
     const tree = this.store.selectedDialogue();
     if (!tree) return;
     const choices = tree.choices.map((c, i) => i === index ? { ...c, decisionOptionId } : c);
+    this.commit({ ...tree, choices });
+  }
+
+  setChoiceRequiredTool(index: number, requiredToolCode: string | null): void {
+    const tree = this.store.selectedDialogue();
+    if (!tree) return;
+    const code = requiredToolCode && requiredToolCode.trim() ? requiredToolCode.trim() : null;
+    const choices = tree.choices.map((c, i) => i === index ? { ...c, requiredToolCode: code } : c);
+    this.commit({ ...tree, choices });
+  }
+
+  choiceEvidenceList(choice: WorldDialogueChoice, field: 'requiresNpcs' | 'requiresTools' | 'requiresInspected'): string {
+    const value = (choice.effect as Record<string, unknown> | undefined)?.[field];
+    return Array.isArray(value) ? value.filter(v => typeof v === 'string').join(', ') : '';
+  }
+
+  setChoiceEvidenceList(index: number, field: 'requiresNpcs' | 'requiresTools' | 'requiresInspected', raw: string): void {
+    const tree = this.store.selectedDialogue();
+    if (!tree) return;
+    const list = raw.split(',').map(v => v.trim()).filter(Boolean);
+    const choices = tree.choices.map((c, i) => {
+      if (i !== index) return c;
+      const effect = { ...(c.effect ?? {}) } as Record<string, unknown>;
+      if (list.length) effect[field] = list;
+      else delete effect[field];
+      return { ...c, effect };
+    });
     this.commit({ ...tree, choices });
   }
 

@@ -8,3 +8,7 @@ class CrearGrupoSerializer(serializers.Serializer):
 
 class AgregarEstudianteSerializer(serializers.Serializer):
     email = serializers.EmailField()
+
+
+class AsignarCasoSerializer(serializers.Serializer):
+    caseVersionId = serializers.IntegerField()

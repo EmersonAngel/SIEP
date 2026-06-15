@@ -25,7 +25,7 @@ export class AudioDirectorService {
   private stems = new Map<MusicLayer, StemTrack>();
   private sfx = new Map<SoundEffect, Howl>();
   private masterVolume = 1.0;
-  private musicVolume = 0.7;
+  private musicVolume = 0.42;
   // Bajo a propósito: los SFX de UI acompañan, no protagonizan.
   private sfxVolume = 0.5;
   private fadeInterval?: number;
@@ -39,7 +39,9 @@ export class AudioDirectorService {
     // Música adaptativa: el proyecto aún NO tiene stems propios (siep_*.ogg).
     // No se hace ninguna request hasta que existan los assets — los métodos de
     // música degradan a no-op cuando `stems` está vacío (sin 404 en consola).
-    const stemFiles: Partial<Record<MusicLayer, string>> = {};
+    const stemFiles: Partial<Record<MusicLayer, string>> = {
+      ambient: 'assets/game/audio/Musica_PsicoGame.mp3',
+    };
 
     for (const [layer, src] of Object.entries(stemFiles) as [MusicLayer, string][]) {
       const howl = new Howl({

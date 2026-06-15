@@ -61,6 +61,7 @@ import {
   composeAvatarTextureAs,
   createAvatarAnimations,
   createAvatarAnimationsFor,
+  modularAvatarFlipX,
   npcAvatarAnimKeys,
   npcAvatarTextureKey,
 } from './phaser-avatar-renderer';
@@ -69,9 +70,11 @@ import {
   NPC_PRESET_RENDER,
   npcPresetConfig,
 } from './npc-avatar-presets';
-import { parseAvatar } from '../character/avatar-config.util';
+import { coerceAvatar, defaultAvatar, hairVariantPatch, parseAvatar } from '../character/avatar-config.util';
 import { AVATAR_STORAGE_KEY } from '../character/avatar.store';
 import { NpcAvatarPresetKey, NpcMotionConfig, NpcMovementZone } from '../../core/models/simulation.model';
+import { AvatarConfig } from '../character/avatar.model';
+import { AUTHORING_HAIR_VARIANTS, AUTHORING_NPC_TEMPLATES } from './authoring-catalog.config';
 
 interface WorldCallbacks {
   onProximity:   (obj: MapObjectState | null) => void;
@@ -197,6 +200,18 @@ class DataDrivenWorldScene extends Phaser.Scene {
       if (!presetConfig) continue;
       for (const spec of avatarLayerSpecs(presetConfig)) {
         this.load.image(spec.textureKey, spec.assetPath);
+      }
+    }
+    for (const template of AUTHORING_NPC_TEMPLATES) {
+      for (const spec of avatarLayerSpecs(template.avatar)) {
+        this.load.image(spec.textureKey, spec.assetPath);
+      }
+    }
+    for (const hair of AUTHORING_HAIR_VARIANTS) {
+      for (const mouth of ['neutra', 'sonrisa', 'seria']) {
+        for (const spec of avatarLayerSpecs({ ...defaultAvatar(), ...hairVariantPatch(hair.id), mouth })) {
+          this.load.image(spec.textureKey, spec.assetPath);
+        }
       }
     }
 
@@ -569,9 +584,10 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
     // Multi-room mode: delegate to renderRoom() when a ScenarioConfig is loaded
     if (this.scenarioConfig) {
-      const startRoom = this.scenarioConfig.rooms.find(r => r.key === this.scenarioConfig!.startRoomKey)
+      const room = this.roomForCurrentWorld()
+        ?? this.scenarioConfig.rooms.find(r => r.key === this.scenarioConfig!.startRoomKey)
         ?? this.scenarioConfig.rooms[0];
-      this.renderRoom(startRoom, startRoom.spawnX, startRoom.spawnY);
+      this.renderRoom(room, room.spawnX, room.spawnY);
       return;
     }
 
@@ -605,7 +621,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
         reduceMotion: this.callbacks.reduceMotion,
         ambientTone: this.ambientTone(),
       });
-      this.world.objects
+      this.renderableWorldObjects()
         .map(obj => {
           const authored = authoredMarkerPosition(obj.key);
           return authored ? { ...obj, x: authored.x, y: authored.y } : obj;
@@ -693,7 +709,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
     // Merge Tiled object positions with backend objects.
     // Tiled object "name" must match the backend MapObjectState "key".
-    let mergedObjects = this.world.objects.map(obj => {
+    let mergedObjects = this.renderableWorldObjects().map(obj => {
       const t = tiledObjects.find(o => o.name === obj.key);
       return (t?.x != null && t?.y != null) ? { ...obj, x: t.x, y: t.y } : obj;
     });
@@ -829,7 +845,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     // En la sala autoría las posiciones del seed pertenecen al tilemap viejo,
     // así que se remapean a los puntos jugables de la sala.
     if (this.world) {
-      const mergedObjects = this.world.objects.map(obj => {
+      const mergedObjects = this.renderableWorldObjects().map(obj => {
         if (authoredClinicalRoom) {
           const authored = authoredMarkerPosition(obj.key);
           if (authored) return { ...obj, x: authored.x, y: authored.y };
@@ -924,6 +940,46 @@ class DataDrivenWorldScene extends Phaser.Scene {
     return true;
   }
 
+  private roomForCurrentWorld(): RoomConfig | null {
+    if (!this.world || !this.scenarioConfig) return null;
+    const mapKey = this.world.map.key;
+    const baseKey = mapKey.replace(/-(accion|cierre|marco)$/i, '');
+    const candidates = new Set([mapKey, `map-${mapKey}`, baseKey, `map-${baseKey}`]);
+    const direct = this.scenarioConfig.rooms.find(room =>
+      candidates.has(room.key) || candidates.has(room.tiledMapKey)
+    );
+    if (direct) return direct;
+    return this.scenarioConfig.rooms.find(room => room.key === this.currentRoomKey) ?? null;
+  }
+
+  private renderableWorldObjects(): MapObjectState[] {
+    const inventory = new Set(this.world?.inventory ?? []);
+    return (this.world?.objects ?? []).filter(object =>
+      !(object.type === 'TOOL' && object.toolCode && inventory.has(object.toolCode))
+    );
+  }
+
+  private objectAvatarTextureKey(objectKey: string): string {
+    return `object-avatar-${objectKey}`;
+  }
+
+  private objectAvatarConfig(object: MapObjectState): AvatarConfig | null {
+    const meta = object.metadata as { avatar?: unknown } | undefined;
+    if (!meta?.avatar) return null;
+    return coerceAvatar(meta.avatar);
+  }
+
+  private ensureObjectAvatarComposite(object: MapObjectState): boolean {
+    const key = this.objectAvatarTextureKey(object.key);
+    if (this.npcCompositesReady.has(key)) return true;
+    const config = this.objectAvatarConfig(object);
+    if (!config) return false;
+    const ok = composeAvatarTextureAs(this, key, avatarLayerSpecs(config));
+    if (!ok) return false;
+    this.npcCompositesReady.add(key);
+    return true;
+  }
+
   /** Registra el mover del NPC (si trae motion) con su posición real de spawn. */
   private registerNpcMover(npc: NpcConfig, pos: { x: number; y: number }, presetKey: string | null): void {
     if (!npc.motion) return;
@@ -947,7 +1003,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     if (!sprite) return;
     if (!mover.presetKey) { sprite.setFlipX(direction === 'left'); return; }  // legacy: solo flip
     if (walking && !this.callbacks.reduceMotion) {
-      sprite.setFlipX(direction === 'right');
+      sprite.setFlipX(modularAvatarFlipX(direction));
       const keys = npcAvatarAnimKeys(mover.presetKey);
       sprite.play(direction === 'down' ? keys.down : direction === 'up' ? keys.up : keys.side, true);
       return;
@@ -1036,7 +1092,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
     return null;
   }
 
-  /** Frame de reposo del NPC modular según dirección (la fila lateral mira a la IZQUIERDA). */
+  /** Frame de reposo del NPC modular según dirección. */
   private applyNpcFacing(container: Phaser.GameObjects.Container, direction: 'down' | 'up' | 'left' | 'right'): void {
     const sprite = (container as unknown as Record<string, unknown>)['__npcSprite'] as Phaser.GameObjects.Sprite | undefined;
     if (!sprite) return;
@@ -1045,7 +1101,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
       : direction === 'down' ? AVATAR_IDLE_FRAMES.down
       : AVATAR_IDLE_FRAMES.side;
     sprite.setFrame(frame);
-    sprite.setFlipX(direction === 'right');
+    sprite.setFlipX(modularAvatarFlipX(direction));
   }
 
   private spawnNpcs(npcs: NpcConfig[]) {
@@ -1266,7 +1322,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
       // Family NPCs near escucha-segura zone
       this.add.sprite(150, 248, 'characters', KenneyCharFrames.NPC_PATIENT_IDLE)
         .setScale(2).setDepth(8).setTint(0xffc8b0);
-      this.add.text(150, 276, 'Madre', {
+      this.add.text(150, 276, 'Abuela', {
         fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#e8c4b8',
         backgroundColor: 'rgba(8,12,18,.72)', padding: { x: 3, y: 2 },
       }).setOrigin(0.5, 0).setDepth(8);
@@ -1465,13 +1521,13 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
   /**
    * Caminata del jugador. El avatar modular usa filas down/side/up (la fila
-   * lateral mira a la IZQUIERDA → flip para la derecha); Kenney usa sus
+   * lateral mira a la DERECHA → flip para la izquierda); Kenney usa sus
    * animaciones `walk-*` (fila lateral mira a la DERECHA → flip para izquierda).
    */
   private playWalkAnimation(direction: PlayerDirection): void {
     if (!this.playerSprite) return;
     if (this.avatarReady) {
-      this.playerSprite.setFlipX(direction === 'right');
+      this.playerSprite.setFlipX(modularAvatarFlipX(direction));
       if (this.callbacks.reduceMotion) { this.setIdleFrame(direction); return; }
       const anim = direction === 'down' ? AVATAR_ANIM_KEYS.down
         : direction === 'up' ? AVATAR_ANIM_KEYS.up
@@ -1492,7 +1548,7 @@ class DataDrivenWorldScene extends Phaser.Scene {
         : direction === 'down' ? AVATAR_IDLE_FRAMES.down
         : AVATAR_IDLE_FRAMES.side;
       this.playerSprite.setFrame(frame);
-      this.playerSprite.setFlipX(direction === 'right');
+      this.playerSprite.setFlipX(modularAvatarFlipX(direction));
       return;
     }
     const idleFrame =
@@ -1526,6 +1582,14 @@ class DataDrivenWorldScene extends Phaser.Scene {
         main = this.add.container(0, 0, [doorFrame, doorPanel, doorKnob]);
       } else if (isExit && this.textures.exists('dungeon-tiles')) {
         main = this.add.image(0, 0, 'dungeon-tiles', KenneyDungeonFrames.DOOR).setScale(2.5);
+      } else if (object.type === 'TOOL') {
+        main = this.buildToolMarker(color, object.shortCode || object.toolCode || object.label);
+      } else if (object.type === 'PERSON' && this.objectAvatarConfig(object)
+          && this.ensureObjectAvatarComposite(object)) {
+        const scale = Number((object.metadata as { scale?: unknown } | undefined)?.scale ?? 0.82);
+        const personSprite = this.add.sprite(0, -Math.round(42 * scale) + 16,
+          this.objectAvatarTextureKey(object.key), AVATAR_IDLE_FRAMES.down).setScale(scale);
+        main = personSprite;
       } else if (object.type === 'PERSON' && MAP_OBJECT_PRESETS[object.key]
           && this.ensureNpcComposite(MAP_OBJECT_PRESETS[object.key])) {
         // Persona del caso con preset modular (p. ej. la consultante): mismo
@@ -1678,10 +1742,27 @@ class DataDrivenWorldScene extends Phaser.Scene {
     return this.add.container(0, 0, [glow, base]);
   }
 
+  private buildToolMarker(color: number, label: string): Phaser.GameObjects.Container {
+    const glow = this.add.circle(0, 0, 30, color, .14);
+    const base = this.add.rectangle(0, 0, 42, 28, color, .9)
+      .setStrokeStyle(3, 0xffffff, .92);
+    const shine = this.add.rectangle(-7, -7, 22, 3, 0xffffff, .28);
+    const text = this.add.text(0, 0, label.slice(0, 4).toUpperCase(), {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '10px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+    }).setOrigin(.5);
+    if (!this.callbacks.reduceMotion) {
+      this.tweens.add({ targets: glow, scale: 1.15, alpha: .07, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    return this.add.container(0, 0, [glow, base, shine, text]);
+  }
+
   private frameForType(type: string): number {
     const map: Record<string, number> = {
       PERSON: KenneyDungeonFrames.DESK, OBJECT: KenneyDungeonFrames.CABINET,
-      ROUTE: KenneyDungeonFrames.PLANT, TOOL: KenneyDungeonFrames.CHAIR,
+      ROUTE: KenneyDungeonFrames.PLANT, TOOL: KenneyDungeonFrames.CABINET,
       WARNING: KenneyDungeonFrames.DESK
     };
     return map[type] ?? KenneyDungeonFrames.DESK;
@@ -1758,13 +1839,14 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
     const mapKey = this.world.map.key;
     const objects = (isHospitalMap(mapKey) || isComisariaMap(mapKey))
-      ? applySceneDisplayLabels(this.world.objects, mapKey)
-      : this.world.objects;
+      ? applySceneDisplayLabels(this.renderableWorldObjects(), mapKey)
+      : this.renderableWorldObjects();
 
     let nearest: MapObjectState | null = null;
     let nearestD = Infinity;
     for (const obj of objects) {
       const marker = this.markers.get(obj.key);
+      if (!marker && obj.type === 'TOOL') continue;
       const ox = marker?.x ?? obj.x;
       const oy = marker?.y ?? obj.y;
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, ox, oy);

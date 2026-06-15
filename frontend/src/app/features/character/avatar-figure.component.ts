@@ -38,7 +38,7 @@ export function avatarFramePosition(pose: AvatarPreviewPose): string {
   return pose === 'side' ? '0% 50%' : '0% 0%';
 }
 
-export function resolveAvatarSpriteLayers(config: AvatarConfig): AvatarSpriteLayer[] {
+export function resolveAvatarSpriteLayers(config: AvatarConfig, pose: AvatarPreviewPose = 'front'): AvatarSpriteLayer[] {
   const face = faceId(config);
   const variant = hairVariantId(config);
   const layers: AvatarSpriteLayer[] = [];
@@ -53,7 +53,10 @@ export function resolveAvatarSpriteLayers(config: AvatarConfig): AvatarSpriteLay
   }
 
   layers.push(layer('body', 'body', `${MODULAR_ASSET_BASE}/body/body_orientadora_purple.png`, 10));
-  layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, 30));
+
+  if (pose === 'front') {
+    layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, 30));
+  }
 
   if (variant !== 'none') {
     layers.push(layer(`hair-front-${variantKey}`, 'hairFront', `${MODULAR_ASSET_BASE}/hair/hair_${variant}_front.png`, 40));
@@ -140,6 +143,6 @@ export class AvatarFigureComponent {
   readonly pose = input<AvatarPreviewPose>('front');
   readonly portrait = input(false);
 
-  readonly layers = computed(() => resolveAvatarSpriteLayers(this.config()));
+  readonly layers = computed(() => resolveAvatarSpriteLayers(this.config(), this.pose()));
   readonly framePosition = computed(() => avatarFramePosition(this.pose()));
 }

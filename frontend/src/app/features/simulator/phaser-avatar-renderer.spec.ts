@@ -12,6 +12,7 @@ import {
   avatarFrameRects,
   avatarLayerSpecs,
   avatarRowLayerOrder,
+  modularAvatarFlipX,
   npcAvatarAnimKeys,
   npcAvatarTextureKey,
 } from './phaser-avatar-renderer';
@@ -34,7 +35,7 @@ describe('phaser-avatar-renderer', () => {
   it('de frente/lado el pelo trasero va DETRÁS del cuerpo; de espaldas, encima', () => {
     expect(avatarRowLayerOrder(0)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
     expect(avatarRowLayerOrder(1)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
-    expect(avatarRowLayerOrder(2)).toEqual(['body', 'hairBack', 'face', 'hairFront']);
+    expect(avatarRowLayerOrder(2)).toEqual(['body', 'hairBack', 'hairFront']);
   });
 
   it('omite las capas de pelo cuando el estilo es "ninguno"', () => {
@@ -71,6 +72,13 @@ describe('phaser-avatar-renderer', () => {
     expect(AVATAR_WALK_FRAMES.side).toEqual([3, 4, 5]);
     expect(AVATAR_WALK_FRAMES.up).toEqual([6, 7, 8]);
     expect(AVATAR_IDLE_FRAMES).toEqual({ down: 1, side: 4, up: 7 });
+  });
+
+  it('voltea el avatar modular solo cuando mira a la izquierda', () => {
+    expect(modularAvatarFlipX('left')).toBe(true);
+    expect(modularAvatarFlipX('right')).toBe(false);
+    expect(modularAvatarFlipX('down')).toBe(false);
+    expect(modularAvatarFlipX('up')).toBe(false);
   });
 
   describe('texturas/animaciones de NPC modular (fase competitiva)', () => {

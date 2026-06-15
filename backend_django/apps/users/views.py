@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
@@ -7,6 +8,9 @@ from shared.permissions import IsAdmin
 from shared.response import api_ok
 
 from .serializers import (
+    AdminUserStatusSerializer,
+    AdminUserSerializer,
+    AdminUserWriteSerializer,
     LoginSerializer,
     RegisterSerializer,
     UserSummarySerializer,
@@ -60,3 +64,46 @@ class MeView(APIView):
 
     def get(self, request):
         return api_ok(UserSummarySerializer(request.user).data)
+
+
+class AdminUserListCreateView(APIView):
+    """GET/POST /api/admin/users — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        users = User.objects.order_by("id")
+        return api_ok(AdminUserSerializer(users, many=True).data)
+
+    def post(self, request):
+        ser = AdminUserWriteSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+        return api_ok(AdminUserSerializer(user).data, message="Usuario creado correctamente")
+
+
+class AdminUserDetailView(APIView):
+    """PUT /api/admin/users/<id> — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def put(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        ser = AdminUserWriteSerializer(instance=user, data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+        return api_ok(AdminUserSerializer(user).data, message="Usuario actualizado correctamente")
+
+
+class AdminUserStatusView(APIView):
+    """PATCH /api/admin/users/<id>/status — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, user_id):
+        user = get_object_or_404(User, pk=user_id)
+        ser = AdminUserStatusSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user.activo = ser.validated_data["activo"]
+        user.save(update_fields=["activo"])
+        return api_ok(AdminUserSerializer(user).data, message="Estado actualizado correctamente")

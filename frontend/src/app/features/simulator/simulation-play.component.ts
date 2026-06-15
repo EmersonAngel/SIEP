@@ -12,7 +12,7 @@ import {
 import {
   DEFAULT_INTERVENTION_RULES, PATIENT_INITIAL_STATE, applyFeedbackToPatient, parseInterventionRules,
 } from './patient-state.util';
-import { missingEvidence, nodeEvidence, unlockedExtraLines } from './evidence-gating.config';
+import { choiceEvidence, mergeEvidence, type NodeEvidenceDef, missingEvidence, nodeEvidence, unlockedExtraLines } from './evidence-gating.config';
 import { DialoguePanelComponent } from './dialogue-panel.component';
 import { GameWorldComponent } from './game-world.component';
 import { JournalPanelComponent, JournalSaveState } from './journal-panel.component';
@@ -32,6 +32,7 @@ import {
   getSceneInteractionDescription,
   isSceneAmbientInteraction,
 } from './scene-map-display.util';
+import { getSceneGuide } from './scene-guide.config';
 import { getSceneObjective } from './scene-objectives.config';
 import { AttemptOutcomeComponent } from './attempt-outcome.component';
 import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util';
@@ -136,6 +137,7 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
             @if (world(); as w) {
               <app-game-world #gameWorld id="game-area" class="game-surface" [world]="w"
                 [scenarioConfig]="scenarioConfig()"
+                [guide]="sceneGuide()"
                 [nearbyInteraction]="nearbyInteraction()" [selectedInteractionKey]="selectedInteraction()?.key ?? null"
                 [motionPaused]="worldMotionPaused()"
                 (proximity)="nearbyInteraction.set($event)" (interact)="openInteraction($event)"
@@ -673,6 +675,12 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   }));
 
   readonly sceneObjective = computed(() => getSceneObjective(this.attempt()?.currentNode.key));
+  readonly sceneGuide = computed(() => {
+    const guide = getSceneGuide(this.attempt()?.currentNode.key);
+    const world = this.world();
+    if (!guide || !world?.objects.some(object => object.key === guide.targetKey)) return null;
+    return guide;
+  });
 
   /** El mundo se congela con diálogo, journal u outcome abiertos (Fase 5/13). */
   readonly worldMotionPaused = computed(() =>
@@ -748,7 +756,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     this.audioDirector.init();
     this.attempt.set(attempt);
     this.patientState.set(PATIENT_INITIAL_STATE);
-    this.viewedNpcKeys.set(new Set<string>());
+    this.viewedNpcKeys.set(this.restoreViewedNpcKeys(attempt));
     this.pendingEvidenceDecisionId = null;
     this.persistAttemptToken(attempt);
     this.loadProgressMap(attempt);
@@ -856,6 +864,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     this.simulationService.openInteraction(game.attemptId, game.attemptToken, interaction.key).subscribe({
       next: result => {
         this.world.set(result.world);
+        this.mergeViewedNpcKeysFromWorld(result.world);
         this.selectedInteraction.set(result.interaction);
         this.dialogue.set(this.decorateDialogue(result.dialogue ?? result.interaction.dialogue));
         this.busy.set(false);
@@ -932,28 +941,30 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     if (door) this.tryOpenDoor(door);
   }
 
-  /** Fase 9: líneas desbloqueadas por evidencia + marca de información incompleta
-   *  + alerta honesta en choices de decisiones prohibidas. Solo presentación. */
+  /** Fase 9: líneas desbloqueadas por evidencia. Las opciones no revelan
+   * su resultado pedagógico antes de responder. */
   private decorateDialogue(dialogue: DialogueState | null): DialogueState | null {
     if (!dialogue) return null;
     const node = this.attempt()?.currentNode;
-    const def = nodeEvidence(node?.key);
-    const extras = unlockedExtraLines(def, dialogue.key, this.world(), this.viewedNpcKeys());
+    const nodeDef = nodeEvidence(node?.key);
+    const extras = unlockedExtraLines(nodeDef, dialogue.key, this.world(), this.viewedNpcKeys());
     const lines = extras.length
       ? [...dialogue.lines, ...extras.map((text, i) => ({
           order: dialogue.lines.length + i + 1,
           speakerName: dialogue.speakerName, text, emotion: 'positive',
         }))]
       : dialogue.lines;
-    const missing = missingEvidence(def, this.world(), this.viewedNpcKeys());
     const optionById = new Map((node?.options ?? []).map(o => [o.id, o]));
     const choices = dialogue.choices.map(choice => {
       if (choice.decisionOptionId == null) return choice;
       const option = optionById.get(choice.decisionOptionId);
+      const evidenceDef = mergeEvidence(nodeDef, choiceEvidence(choice));
+      const missing = missingEvidence(evidenceDef, this.world(), this.viewedNpcKeys());
+      const evidenceMessage = evidenceDef && missing.length ? this.evidenceMissingMessage(evidenceDef, missing) : null;
       return {
         ...choice,
         isProhibited: choice.isProhibited || option?.prohibitedConduct || false,
-        ...(missing.length && def ? { evidenceWarning: def.missingMessage } : {}),
+        ...(evidenceMessage ? { evidenceWarning: evidenceMessage } : {}),
       };
     });
     return { ...dialogue, lines, choices };
@@ -1033,12 +1044,14 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
       this.showActionError('Esta intervención pertenece a otra etapa del caso. Vuelve cuando el flujo te lleve a esta sala.');
       return;
     }
-    const evidenceDef = nodeEvidence(game.currentNode.key);
+    const selectedChoice = this.dialogue()?.choices.find(choice => choice.decisionOptionId === decisionOptionId);
+    const evidenceDef = mergeEvidence(nodeEvidence(game.currentNode.key), choiceEvidence(selectedChoice));
     const missing = missingEvidence(evidenceDef, this.world(), this.viewedNpcKeys());
     if (evidenceDef && missing.length && this.pendingEvidenceDecisionId !== decisionOptionId) {
       this.pendingEvidenceDecisionId = decisionOptionId;
-      this.dialogue.set(this.buildEvidenceGateDialogue(evidenceDef.missingMessage, decisionOptionId));
-      this.announce(evidenceDef.missingMessage);
+      const message = this.evidenceMissingMessage(evidenceDef, missing);
+      this.dialogue.set(this.buildEvidenceGateDialogue(message, decisionOptionId));
+      this.announce(message);
       return;
     }
     this.pendingEvidenceDecisionId = null;
@@ -1061,10 +1074,13 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
             this.audioDirector.playSfx('session_complete');
           }
           if (updated.feedback) {
-            // Consecuencia visible: la paciente reacciona (HUD + tint/shake del NPC).
-            const nextPatient = applyFeedbackToPatient(this.patientState(), this.interventionRules, updated.feedback);
-            this.patientState.set(nextPatient);
-            this.gameWorld?.updatePatientVisualState(nextPatient);
+            const retryRequired = updated.feedback.prohibitedConduct || updated.feedback.classification === 'INADEQUATE';
+            if (!retryRequired) {
+              // Consecuencia visible: la paciente reacciona (HUD + tint/shake del NPC).
+              const nextPatient = applyFeedbackToPatient(this.patientState(), this.interventionRules, updated.feedback);
+              this.patientState.set(nextPatient);
+              this.gameWorld?.updatePatientVisualState(nextPatient);
+            }
             window.setTimeout(() => this.dialogue.set(this.buildSupervisionDialogue(updated.feedback!)), 400);
           }
         },
@@ -1081,6 +1097,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     this.simulationService.useTool(game.attemptId, game.attemptToken, toolCode, target).subscribe({
       next: (result: ToolUseResult) => {
         this.world.set(result.world);
+        this.mergeViewedNpcKeysFromWorld(result.world);
         const cur = this.attempt();
         if (cur) {
           const newStress = Math.max(0, Math.min(100, cur.stressIndex + result.stressDelta));
@@ -1115,7 +1132,18 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
 
   /** Diálogo informativo de NPC (frontend-only, sin decisión) → modo cinematic. */
   openNpcDialogue(npc: NpcConfig) {
-    this.viewedNpcKeys.update(prev => new Set(prev).add(npc.key));
+    this.viewedNpcKeys.update(prev => {
+      const next = new Set(prev).add(npc.key);
+      this.persistViewedNpcKeys(next);
+      return next;
+    });
+    const game = this.attempt();
+    if (game?.status === 'IN_PROGRESS') {
+      this.simulationService.recordNpcInteraction(game.attemptId, game.attemptToken, npc.key).subscribe({
+        next: world => this.mergeViewedNpcKeysFromWorld(world),
+        error: () => this.showActionError('No pudimos guardar la interaccion con el NPC.'),
+      });
+    }
     if (!npc.dialogue?.lines?.length) return;
     this.dialogue.set({
       key: `npc-${npc.key}`,
@@ -1227,6 +1255,45 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     }, 5000);
   }
 
+  private evidenceMissingMessage(def: NodeEvidenceDef, missing: string[]): string {
+    const items = missing
+      .map(item => this.evidenceMissingItemLabel(item))
+      .filter((item): item is string => item.length > 0);
+    if (!items.length) return def.missingMessage;
+    return `Información incompleta: falta ${this.joinSpanish(items)} antes de decidir.`;
+  }
+
+  private evidenceMissingItemLabel(item: string): string {
+    const [kind, key] = item.split(':', 2);
+    if (!key) return '';
+    if (kind === 'npc') return `hablar con ${this.evidenceNpcLabel(key)}`;
+    if (kind === 'tool') return `tener o usar ${this.evidenceToolLabel(key)}`;
+    if (kind === 'inspected') return `revisar ${this.evidenceObjectLabel(key)}`;
+    return key;
+  }
+
+  private evidenceNpcLabel(key: string): string {
+    const fromScenario = this.scenarioConfig()
+      ?.rooms.flatMap(room => room.npcs)
+      .find(npc => npc.key === key)?.displayName;
+    if (fromScenario) return fromScenario;
+    return this.evidenceObjectLabel(key);
+  }
+
+  private evidenceToolLabel(code: string): string {
+    return this.world()?.tools.find(tool => tool.code === code)?.label ?? code;
+  }
+
+  private evidenceObjectLabel(key: string): string {
+    return this.world()?.objects.find(obj => obj.key === key)?.label ?? key;
+  }
+
+  private joinSpanish(items: string[]): string {
+    if (items.length <= 1) return items[0] ?? '';
+    if (items.length === 2) return `${items[0]} y ${items[1]}`;
+    return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+  }
+
   /** Gate de evidencia (Fase 9): permite cancelar o decidir bajo registro. */
   private buildEvidenceGateDialogue(message: string, decisionOptionId: number): DialogueState {
     return {
@@ -1244,18 +1311,28 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   }
 
   private buildSupervisionDialogue(feedback: SimulationFeedback): DialogueState {
+    const retryRequired = feedback.prohibitedConduct || feedback.classification === 'INADEQUATE';
     const lines: DialogueState['lines'] = [
       { order: 1, speakerName: 'Supervisión clínica', text: feedback.message, emotion: feedback.prohibitedConduct ? 'danger' : 'neutral' }
     ];
     if (feedback.prohibitionReason) {
       lines.push({ order: 2, speakerName: 'Supervisión clínica', text: feedback.prohibitionReason, emotion: 'danger' });
     }
-    lines.push({
-      order: lines.length + 1,
-      speakerName: '',
-      text: `Puntaje ${feedback.scoreDelta >= 0 ? '+' : ''}${feedback.scoreDelta} · Estrés ${feedback.stressDelta >= 0 ? '+' : ''}${feedback.stressDelta}% · Confianza ${feedback.trustDelta >= 0 ? '+' : ''}${feedback.trustDelta} · Riesgo ${feedback.victimRiskDelta >= 0 ? '+' : ''}${feedback.victimRiskDelta}`,
-      emotion: 'neutral'
-    });
+    if (retryRequired) {
+      lines.push({
+        order: lines.length + 1,
+        speakerName: '',
+        text: 'No se avanzó el caso ni se aplicaron cambios acumulados. Revisa la escena y vuelve a responder.',
+        emotion: 'concerned'
+      });
+    } else {
+      lines.push({
+        order: lines.length + 1,
+        speakerName: '',
+        text: `Puntaje ${feedback.scoreDelta >= 0 ? '+' : ''}${feedback.scoreDelta} · Estrés ${feedback.stressDelta >= 0 ? '+' : ''}${feedback.stressDelta}% · Confianza ${feedback.trustDelta >= 0 ? '+' : ''}${feedback.trustDelta} · Riesgo ${feedback.victimRiskDelta >= 0 ? '+' : ''}${feedback.victimRiskDelta}`,
+        emotion: 'neutral'
+      });
+    }
     return {
       key: `supervision-${Date.now()}`, speakerName: 'Supervisión clínica',
       portraitKey: null,
@@ -1304,6 +1381,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   private applyLoadedWorld(world: SimulationWorldState): void {
     const previousMapKey = this.world()?.map.key ?? null;
     this.world.set(world);
+    this.mergeViewedNpcKeysFromWorld(world);
     this.loading.set(false);
     this.busy.set(false);
     window.setTimeout(() => this.fadeActive.set(false), 80);
@@ -1333,7 +1411,50 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   private persistAttemptToken(attempt: SimulationAttemptState) {
     sessionStorage.setItem(`siep_attempt_${attempt.caseVersionId}`, JSON.stringify({
       attemptId: attempt.attemptId,
-      attemptToken: attempt.attemptToken
+      attemptToken: attempt.attemptToken,
+      viewedNpcKeys: Array.from(this.viewedNpcKeys()),
+    }));
+  }
+
+  private restoreViewedNpcKeys(attempt: SimulationAttemptState): ReadonlySet<string> {
+    try {
+      const raw = sessionStorage.getItem(`siep_attempt_${attempt.caseVersionId}`);
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as { attemptId?: unknown; viewedNpcKeys?: unknown };
+      if (parsed.attemptId !== attempt.attemptId || !Array.isArray(parsed.viewedNpcKeys)) {
+        return new Set<string>();
+      }
+      return new Set(parsed.viewedNpcKeys.filter((key): key is string => typeof key === 'string' && key.length > 0));
+    } catch {
+      return new Set<string>();
+    }
+  }
+
+  private mergeViewedNpcKeysFromWorld(world: SimulationWorldState): void {
+    const fromDb = this.viewedNpcKeysFromWorld(world);
+    if (!fromDb.length) return;
+    this.viewedNpcKeys.update(prev => {
+      const next = new Set(prev);
+      fromDb.forEach(key => next.add(key));
+      this.persistViewedNpcKeys(next);
+      return next;
+    });
+  }
+
+  private viewedNpcKeysFromWorld(world: SimulationWorldState): string[] {
+    const raw = world.flags?.['viewedNpcKeys'];
+    return Array.isArray(raw)
+      ? raw.filter((key): key is string => typeof key === 'string' && key.length > 0)
+      : [];
+  }
+
+  private persistViewedNpcKeys(keys: ReadonlySet<string> = this.viewedNpcKeys()): void {
+    const attempt = this.attempt();
+    if (!attempt) return;
+    sessionStorage.setItem(`siep_attempt_${attempt.caseVersionId}`, JSON.stringify({
+      attemptId: attempt.attemptId,
+      attemptToken: attempt.attemptToken,
+      viewedNpcKeys: Array.from(keys),
     }));
   }
 

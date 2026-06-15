@@ -3,10 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   AfterViewInit,
   Component,
-  ElementRef,
-  NgZone,
   OnDestroy,
-  ViewChild,
   inject,
   signal
 } from '@angular/core';
@@ -18,15 +15,10 @@ import { AuthService } from '../../core/auth/auth.service';
 import { APP_BRAND } from '../../core/config/brand.config';
 import {
   LOGIN_ASSETS,
-  LOGIN_LAYOUT,
   LOGIN_PEDAGOGY_PILLARS,
   LOGIN_REMEMBER_EMAIL_KEY,
   loginLayoutCssVars
 } from './login-assets.config';
-import {
-  LOGIN_CHARACTER_SCENE_KEY,
-  createLoginCharacterScene
-} from './login-character.scene';
 
 @Component({
   selector: 'app-login',
@@ -36,24 +28,16 @@ import {
   styleUrl: './login.component.scss'
 })
 export class LoginComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('characterStage') private characterStage?: ElementRef<HTMLDivElement>;
-
   readonly brand = APP_BRAND;
   readonly assets = LOGIN_ASSETS;
   readonly layoutCssVars = signal(loginLayoutCssVars(this.viewportWidth()));
-  readonly characterStageVisible = signal(true);
   readonly pillars = LOGIN_PEDAGOGY_PILLARS.map(p => ({ ...p, iconMissing: true }));
 
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
-  private readonly ngZone = inject(NgZone);
 
-  private phaserGame?: import('phaser').Game;
-  private resizeObserver?: ResizeObserver;
   private windowResizeListener?: () => void;
-  private characterBootScheduled?: ReturnType<typeof setTimeout>;
-  private characterGameBooting = false;
 
   readonly hidePassword = signal(true);
   readonly loading = signal(false);
@@ -69,9 +53,7 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
   });
 
   ngAfterViewInit() {
-    this.characterStageVisible.set(!this.isMobileViewport());
     this.syncLayoutVars();
-    this.initCharacterScene();
     if (typeof window !== 'undefined') {
       this.windowResizeListener = () => this.onViewportResize();
       window.addEventListener('resize', this.windowResizeListener);
@@ -82,7 +64,6 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
     if (typeof window !== 'undefined' && this.windowResizeListener) {
       window.removeEventListener('resize', this.windowResizeListener);
     }
-    this.destroyCharacterGame();
   }
 
   onLoginCardArtLoad() {
@@ -112,13 +93,14 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
     this.loading.set(true);
     this.error.set('');
     const { email, password, remember } = this.form.getRawValue();
+    const normalizedEmail = email.trim().toLowerCase();
     if (remember) {
-      localStorage.setItem(LOGIN_REMEMBER_EMAIL_KEY, email);
+      localStorage.setItem(LOGIN_REMEMBER_EMAIL_KEY, normalizedEmail);
     } else {
       localStorage.removeItem(LOGIN_REMEMBER_EMAIL_KEY);
     }
 
-    this.auth.login(email, password).subscribe({
+    this.auth.login(normalizedEmail, password).subscribe({
       next: () => this.router.navigate(['/portal/dashboard']),
       error: (error: unknown) => {
         this.error.set(this.loginErrorMessage(error));
@@ -163,105 +145,6 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
     return 'No fue posible iniciar sesión. Intenta nuevamente.';
   }
 
-  private initCharacterScene() {
-    const host = this.characterStage?.nativeElement;
-    if (!host || typeof window === 'undefined') return;
-
-    if (this.isMobileViewport()) {
-      this.destroyCharacterGame();
-      return;
-    }
-
-    this.ngZone.runOutsideAngular(async () => {
-      const Phaser = await import('phaser');
-      const SceneClass = createLoginCharacterScene(Phaser);
-
-      const boot = () => {
-        if (this.isMobileViewport()) {
-          this.destroyCharacterGame();
-          return;
-        }
-
-        const { stageMinWidthPx, stageMinHeightPx } = LOGIN_LAYOUT.character;
-        const width = Math.max(
-          host.clientWidth,
-          stageMinWidthPx,
-          Math.round(host.getBoundingClientRect().width)
-        );
-        const height = Math.max(
-          host.clientHeight,
-          stageMinHeightPx,
-          Math.round(host.getBoundingClientRect().height)
-        );
-
-        if (this.phaserGame) {
-          this.phaserGame.scale.resize(width, height);
-          this.fitCharacterInScene();
-          return;
-        }
-
-        if (this.characterGameBooting) return;
-        this.characterGameBooting = true;
-        host.replaceChildren();
-
-        this.phaserGame = new Phaser.Game({
-          type: Phaser.AUTO,
-          parent: host,
-          width,
-          height,
-          transparent: true,
-          backgroundColor: 'rgba(0,0,0,0)',
-          pixelArt: true,
-          antialias: false,
-          roundPixels: true,
-          scene: SceneClass,
-          scale: {
-            mode: Phaser.Scale.RESIZE,
-            autoCenter: Phaser.Scale.NO_CENTER
-          }
-        });
-        this.characterGameBooting = false;
-      };
-
-      const scheduleBoot = () => {
-        if (this.characterBootScheduled) {
-          clearTimeout(this.characterBootScheduled);
-        }
-        this.characterBootScheduled = setTimeout(() => boot(), 32);
-      };
-
-      scheduleBoot();
-
-      this.resizeObserver?.disconnect();
-      this.resizeObserver = new ResizeObserver(() => scheduleBoot());
-      this.resizeObserver.observe(host);
-    });
-  }
-
-  private destroyCharacterGame() {
-    if (this.characterBootScheduled) {
-      clearTimeout(this.characterBootScheduled);
-      this.characterBootScheduled = undefined;
-    }
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = undefined;
-    this.phaserGame?.destroy(true);
-    this.phaserGame = undefined;
-    this.characterGameBooting = false;
-    this.characterStage?.nativeElement.replaceChildren();
-  }
-
-  private fitCharacterInScene() {
-    const scene = this.phaserGame?.scene.getScene(LOGIN_CHARACTER_SCENE_KEY);
-    if (scene && 'fitCharacter' in scene) {
-      (scene as { fitCharacter: () => void }).fitCharacter();
-    }
-  }
-
-  private isMobileViewport(): boolean {
-    return this.viewportWidth() <= LOGIN_LAYOUT.breakpoints.mobileMaxPx;
-  }
-
   private viewportWidth(): number {
     return typeof window !== 'undefined' ? window.innerWidth : 1366;
   }
@@ -271,26 +154,6 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
   }
 
   private onViewportResize() {
-    const mobile = this.isMobileViewport();
-    this.characterStageVisible.set(!mobile);
     this.syncLayoutVars();
-
-    if (mobile) {
-      this.destroyCharacterGame();
-      return;
-    }
-
-    if (!this.phaserGame) {
-      setTimeout(() => this.initCharacterScene(), 0);
-      return;
-    }
-
-    this.fitCharacterInScene();
-    const host = this.characterStage?.nativeElement;
-    if (host) {
-      const w = Math.max(host.clientWidth, LOGIN_LAYOUT.character.stageMinWidthPx);
-      const h = Math.max(host.clientHeight, LOGIN_LAYOUT.character.stageMinHeightPx);
-      this.phaserGame.scale.resize(w, h);
-    }
   }
 }

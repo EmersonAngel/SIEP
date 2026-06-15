@@ -12,6 +12,11 @@ class IsAdmin(BasePermission):
         return _has_role(request, "ADMIN")
 
 
+class IsProfesor(BasePermission):
+    def has_permission(self, request, view):
+        return _has_role(request, "PROFESOR")
+
+
 class IsProfesorOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return _has_role(request, "PROFESOR", "ADMIN")

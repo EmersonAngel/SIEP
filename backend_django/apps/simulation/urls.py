@@ -9,6 +9,7 @@ from apps.simulation.views.game_views import (
     DecisionsView,
     EnterRoomView,
     InteractionView,
+    NpcInteractionView,
     ProgressMapView,
     ReflectionsView,
     SafeExitView,
@@ -33,6 +34,7 @@ urlpatterns = [
     path("/attempts/<uuid:attempt_id>/world-state", WorldStateView.as_view()),
     path("/attempts/<uuid:attempt_id>/enter-room", EnterRoomView.as_view()),
     path("/attempts/<uuid:attempt_id>/interactions/<str:interaction_key>", InteractionView.as_view()),
+    path("/attempts/<uuid:attempt_id>/npcs/<str:npc_key>", NpcInteractionView.as_view()),
     path("/attempts/<uuid:attempt_id>/tools/use", ToolUseView.as_view()),
     path("/attempts/<uuid:attempt_id>/safe-exit", SafeExitView.as_view()),
 ]

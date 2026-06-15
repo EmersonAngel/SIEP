@@ -3,8 +3,10 @@ Contract-faithful to Spring SimulationGameController + SimulationWorldService.
 Runs against the seeded SIM-VBG-001 (every node has a scene map)."""
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from rest_framework.test import APIClient
 
+from apps.grupos.models import Grupo
 from apps.simulation.models import CaseVersion
 
 User = get_user_model()
@@ -17,10 +19,12 @@ def cl(user):
 
 
 @pytest.fixture
-def estudiante(db):
-    return User.objects.create_user(
+def estudiante(db, case_version_id):
+    user = User.objects.create_user(
         email="est_world@x.com", password="x", nombre="Est", apellido="World", role="ESTUDIANTE"
     )
+    _assign_case_to_student(user, case_version_id)
+    return user
 
 
 @pytest.fixture
@@ -40,6 +44,26 @@ def profesor(db):
 @pytest.fixture
 def case_version_id(db):
     return CaseVersion.objects.get(simulation_case__code="SIM-VBG-001", status="PUBLISHED").id
+
+
+def _assign_case_to_student(estudiante, case_version_id):
+    profesor = User.objects.create_user(
+        email="prof_world_owner@x.com",
+        password="x",
+        nombre="Pro",
+        apellido="World",
+        role="PROFESOR",
+    )
+    grupo = Grupo.objects.create(nombre="Grupo world", codigo="WORLD1", profesor=profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, estudiante.id],
+        )
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
 
 
 def _start(client, case_version_id):
@@ -70,15 +94,43 @@ def test_get_world_returns_scene(estudiante, case_version_id):
 def test_update_world_state_clamps_and_records(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
+    world = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
     resp = c.patch(
         f"/api/simulation/attempts/{attempt_id}/world-state",
-        {"attemptToken": token, "playerX": 5000, "playerY": 200, "currentMapKey": "x"},
+        {"attemptToken": token, "playerX": 5000, "playerY": 200, "currentMapKey": world["map"]["key"]},
         format="json",
     )
     assert resp.status_code == 200
     assert resp.data["message"] == "Estado de mundo actualizado"
-    assert resp.data["data"]["player"]["x"] == 960  # clamped to map max
+    assert resp.data["data"]["player"]["x"] == world["map"]["width"]  # clamped to map max
     assert resp.data["data"]["player"]["y"] == 200
+
+
+def test_update_world_state_ignores_stale_map_key_after_room_change(estudiante, case_version_id):
+    from apps.simulation.models import SceneMap
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    initial = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
+    target = (
+        SceneMap.objects.filter(case_version_id=case_version_id)
+        .select_related("node").exclude(map_key=initial["map"]["key"]).first()
+    )
+    assert target is not None
+    entered = c.post(
+        f"/api/simulation/attempts/{attempt_id}/enter-room",
+        {"attemptToken": token, "targetNodeKey": target.node.node_key, "entryX": 100, "entryY": 120},
+        format="json",
+    ).data["data"]
+    assert entered["player"] == {"x": 100, "y": 120}
+
+    stale = c.patch(
+        f"/api/simulation/attempts/{attempt_id}/world-state",
+        {"attemptToken": token, "playerX": 500, "playerY": 450, "currentMapKey": initial["map"]["key"]},
+        format="json",
+    )
+    assert stale.status_code == 200
+    assert stale.data["data"]["map"]["key"] == target.map_key
+    assert stale.data["data"]["player"] == {"x": 100, "y": 120}
 
 
 def test_interaction_marks_inspected(estudiante, case_version_id):
@@ -99,6 +151,27 @@ def test_interaction_marks_inspected(estudiante, case_version_id):
     assert "preparedDecisionOptionId" in result
 
 
+def test_tool_object_disappears_after_pickup(estudiante, case_version_id):
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    world = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
+    tool = next(obj for obj in world["objects"] if obj["type"] == "TOOL" and obj["toolCode"])
+
+    resp = c.post(
+        f"/api/simulation/attempts/{attempt_id}/interactions/{tool['key']}",
+        {"attemptToken": token},
+        format="json",
+    )
+
+    assert resp.status_code == 200
+    updated = resp.data["data"]["world"]
+    assert tool["toolCode"] in updated["inventory"]
+    assert tool["key"] not in {obj["key"] for obj in updated["objects"]}
+
+    again = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
+    assert tool["key"] not in {obj["key"] for obj in again["objects"]}
+
+
 def test_use_tool_generic_is_pertinent(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
@@ -116,6 +189,39 @@ def test_use_tool_generic_is_pertinent(estudiante, case_version_id):
     assert result["pertinent"] is True  # no target -> generic use is pertinent
     assert result["stressDelta"] == -5
     assert tool_code in result["world"]["inventory"]
+
+
+def test_record_npc_interaction_persists_in_world_flags(estudiante, case_version_id):
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    resp = c.post(
+        f"/api/simulation/attempts/{attempt_id}/npcs/enfermera-urgencias",
+        {"attemptToken": token},
+        format="json",
+    )
+    assert resp.status_code == 200
+    assert resp.data["message"] == "Interaccion con NPC registrada"
+    assert resp.data["data"]["flags"]["viewedNpcKeys"] == ["enfermera-urgencias"]
+
+    again = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}")
+    assert again.status_code == 200
+    assert again.data["data"]["flags"]["viewedNpcKeys"] == ["enfermera-urgencias"]
+
+
+def test_person_map_interaction_persists_as_viewed_npc(estudiante, case_version_id):
+    c = cl(estudiante)
+    attempt_id, token = _start(c, case_version_id)
+    world = c.get(f"/api/simulation/attempts/{attempt_id}/world?attemptToken={token}").data["data"]
+    person = next(obj for obj in world["objects"] if obj["type"] == "PERSON")
+    resp = c.post(
+        f"/api/simulation/attempts/{attempt_id}/interactions/{person['key']}",
+        {"attemptToken": token},
+        format="json",
+    )
+    assert resp.status_code == 200
+    viewed = resp.data["data"]["world"]["flags"]["viewedNpcKeys"]
+    assert person["key"] in viewed
+    assert resp.data["data"]["dialogue"]["key"] in viewed
 
 
 def test_staff_can_view_world_but_other_student_cannot(estudiante, otro_estudiante, profesor, case_version_id):

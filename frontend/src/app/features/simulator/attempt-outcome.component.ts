@@ -132,8 +132,12 @@ import { decisionTotal, performanceLabel } from './outcome.util';
         }
 
         <footer class="oc-actions">
-          <button type="button" class="oc-btn oc-btn--go" (click)="retry.emit()">Reintentar caso</button>
-          <a class="oc-btn oc-btn--line" routerLink="/portal/simulador">Volver al simulador</a>
+          @if (status() === 'SAFE_EXITED') {
+            <button type="button" class="oc-btn oc-btn--go" (click)="retry.emit()">Volver al juego</button>
+          } @else {
+            <button type="button" class="oc-btn oc-btn--go" (click)="retry.emit()">Reintentar caso</button>
+            <a class="oc-btn oc-btn--line" routerLink="/portal/simulador">Volver al simulador</a>
+          }
           <a class="oc-btn oc-btn--line" routerLink="/portal/dashboard">Volver al portal</a>
         </footer>
       </section>

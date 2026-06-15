@@ -271,6 +271,7 @@ export class UsersComponent implements OnInit {
     }
     const selected = this.selectedUser();
     const value = this.form.getRawValue();
+    const email = value.email.trim().toLowerCase();
     if (!selected && !value.password) {
       this.form.controls.password.markAsTouched();
       this.error.set('La contraseña es obligatoria al crear usuarios.');
@@ -287,14 +288,14 @@ export class UsersComponent implements OnInit {
 
     const request$ = selected
       ? this.service.update(selected.id, {
-          email: value.email,
+          email,
           password: value.password || undefined,
           nombre: value.nombre,
           apellido: value.apellido,
           role: value.role
         })
       : this.service.create({
-          email: value.email,
+          email,
           password: value.password,
           nombre: value.nombre,
           apellido: value.apellido,

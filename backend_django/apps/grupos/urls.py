@@ -1,9 +1,11 @@
 from django.urls import path
 
-from .views import GrupoEstudiantesView, GrupoListCreateView
+from .views import GrupoCasoDetailView, GrupoCasosView, GrupoEstudiantesView, GrupoListCreateView
 
-# Mounted at "api/grupos".
+# Mounted at "api/grupos/" when used through include.
 urlpatterns = [
     path("", GrupoListCreateView.as_view()),
-    path("/<int:pk>/estudiantes", GrupoEstudiantesView.as_view()),
+    path("<int:pk>/estudiantes", GrupoEstudiantesView.as_view()),
+    path("<int:pk>/casos", GrupoCasosView.as_view()),
+    path("<int:pk>/casos/<int:case_version_id>", GrupoCasoDetailView.as_view()),
 ]

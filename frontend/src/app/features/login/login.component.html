@@ -9,20 +9,6 @@
   <div class="siep-login__stage">
     <section class="siep-login__cluster" aria-label="Acceso al sistema SIEP">
       <div class="siep-login__card-row">
-        @if (characterStageVisible()) {
-          <div class="siep-login__hero">
-            <div class="siep-login__character-wrap">
-              <div
-                id="characterStage"
-                #characterStage
-                class="siep-login__character"
-                aria-hidden="true"
-                data-siep-character-stage="single"
-              ></div>
-            </div>
-          </div>
-        }
-
         <article
           class="siep-login__card"
           [class.siep-login__card--art]="loginCardArtLoaded()"

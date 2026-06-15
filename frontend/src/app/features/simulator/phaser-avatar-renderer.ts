@@ -7,7 +7,7 @@ import { AvatarLayerKind, resolveAvatarSpriteLayers } from '../character/avatar-
  *
  * Los assets modulares (`/assets/characters/modular/...`) son hojas de
  * 192×288 px = 3 columnas (frames de caminata) × 3 filas (direcciones):
- *   fila 0 = frente (down) · fila 1 = lado (mira a la IZQUIERDA) · fila 2 = espalda (up)
+ *   fila 0 = frente (down) · fila 1 = lado (mira a la DERECHA) · fila 2 = espalda (up)
  *
  * La composición por capas (cuerpo → pelo atrás → cara → pelo frente) se hace
  * una vez en un CanvasTexture y se registra como spritesheet de 9 frames.
@@ -44,6 +44,14 @@ export const AVATAR_WALK_FRAMES = {
   up: [6, 7, 8],
 } as const;
 
+/**
+ * The modular side row faces right. Flip only when the actor moves or rests
+ * to the left; otherwise face/hair layers appear mirrored.
+ */
+export function modularAvatarFlipX(direction: 'down' | 'up' | 'left' | 'right'): boolean {
+  return direction === 'left';
+}
+
 export interface AvatarLayerSpec {
   /** Clave de textura Phaser para precargar la capa. */
   textureKey: string;
@@ -68,9 +76,9 @@ export function avatarLayerSpecs(config: AvatarConfig): AvatarLayerSpec[] {
  * cráneo. La cara va sobre el cuerpo y el flequillo cierra.
  */
 export function avatarRowLayerOrder(row: number): readonly AvatarLayerKind[] {
-  return row === 2
-    ? ['body', 'hairBack', 'face', 'hairFront']
-    : ['hairBack', 'body', 'face', 'hairFront'];
+  if (row === 0) return ['hairBack', 'body', 'face', 'hairFront'];
+  if (row === 1) return ['hairBack', 'body', 'face', 'hairFront'];
+  return ['body', 'hairBack', 'hairFront'];
 }
 
 /** Geometría de los 9 frames (índice = fila*3 + columna). */

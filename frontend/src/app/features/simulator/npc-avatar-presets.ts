@@ -88,7 +88,7 @@ export const NPC_PRESET_RENDER: Record<NpcAvatarPresetKey, NpcPresetRenderHints>
  */
 export const MAP_OBJECT_PRESETS: Record<string, NpcAvatarPresetKey> = {
   'escucha-segura': 'paciente-vbg',           // legacy (caso v1)
-  'familia-crisis': 'madre-vbg',              // urgencias: madre de la sobreviviente
+  'familia-crisis': 'madre-vbg',              // urgencias: abuela de la niña / madre de la sobreviviente
   'familia-duelo': 'madre-vbg',               // sala de escucha: decisión H1
   'psicologa-acompanante': 'psicologa-hospitalaria',  // sala de escucha: H3
   'funcionaria-recepcion': 'funcionaria-recepcion',   // comisaría recepción

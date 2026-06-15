@@ -94,8 +94,8 @@ NODES = [
         "narrative": (
             "Son las 11 de la noche. Una mujer de 22 años ingresa a urgencias "
             "con 28 heridas de arma cortopunzante tras una tentativa de "
-            "feminicidio; su hija de 3 años falleció en el ataque. La madre y "
-            "los hermanos de la sobreviviente llegan alterados exigiendo ver a "
+            "feminicidio; su hija de 3 años falleció en el ataque. La madre de "
+            "la sobreviviente y sus hermanos llegan alterados exigiendo ver a "
             "la niña. Estabiliza emocionalmente a la familia y evita acciones "
             "prematuras que aumenten la crisis."
         ),
@@ -180,7 +180,7 @@ DECISIONS = [
             {
                 "key": "h1-noticia-sin-protocolo",
                 "text": (
-                    "Notificar de inmediato la muerte de la niña a la madre y la "
+                    "Notificar de inmediato la muerte de la niña a la abuela y la "
                     "familia, sin estabilización previa ni protocolo."
                 ),
                 "classification": "INADEQUATE",
@@ -635,8 +635,8 @@ _ESCUCHA_DECISION_OBJECTS = [
         "key": "familia-duelo", "label": "Familia en crisis", "type": "PERSON",
         "pos": (168, 408), "icon": "person", "short": "FAM",
         "prompt": "Acompañar a la familia",
-        "text": "La madre y los hermanos de la sobreviviente esperan noticias de la niña.",
-        "dialogue": ("Madre de la sobreviviente", [
+        "text": "La abuela de la niña y los hermanos de la sobreviviente esperan noticias.",
+        "dialogue": ("Abuela de la niña", [
             ("¡Por favor! Nadie nos dice nada de la niña… ¿dónde está mi nieta? ¡Quiero verla!", "anxious"),
             ("Mi hija sigue en cirugía… dicen que son 28 heridas. ¿Quién pudo hacerle esto?", "negative"),
             ("(La familia está en crisis. Define el foco inmediato de tu intervención.)", "neutral"),
@@ -745,8 +745,8 @@ MAP_OBJECTS = {
             "key": "familia-crisis", "label": "Familia en crisis", "type": "PERSON",
             "pos": (190, 420), "icon": "person", "short": "FAM",
             "prompt": "Hablar con la familia en crisis",
-            "text": "La madre y los hermanos de la sobreviviente exigen ver a la niña.",
-            "dialogue": ("Madre de la sobreviviente", [
+            "text": "La abuela de la niña y los hermanos de la sobreviviente exigen verla.",
+            "dialogue": ("Abuela de la niña", [
                 ("¡Déjenme pasar! ¡Quiero ver a mi nieta y a mi hija! ¿Por qué nadie nos dice nada?", "anxious"),
                 ("Llegamos apenas supimos… ¿están bien? ¡Dígame que están bien!", "anxious"),
                 ("(La familia necesita contención antes de cualquier información difícil. "
@@ -841,7 +841,7 @@ MAP_OBJECTS = {
             "pos": (168, 408), "icon": "person", "short": "FAM",
             "prompt": "Despedirte de la familia",
             "text": "La familia quedó contenida y orientada.",
-            "dialogue": ("Madre de la sobreviviente", [
+            "dialogue": ("Abuela de la niña", [
                 ("Gracias por no dejarnos solas en esto…", "sad"),
                 ("Sé que viene un camino largo. ¿Qué sigue ahora para mi hija?", "neutral"),
             ]),

@@ -247,6 +247,21 @@ export class SetMapAmbientCommand implements EditorCommand {
   }
 }
 
+export class SetMapFieldsCommand implements EditorCommand {
+  readonly type = 'SetMapFields';
+  private previous: SceneMapDefinition | null = null;
+  constructor(private readonly updates: Partial<SceneMapDefinition>) {}
+
+  execute(state: EditorState): EditorState {
+    this.previous = state.map;
+    return { ...state, map: { ...state.map, ...this.updates } };
+  }
+
+  undo(state: EditorState): EditorState {
+    return this.previous ? { ...state, map: this.previous } : state;
+  }
+}
+
 // ─── Editor State ───────────────────────────────────────────────────────────
 
 export interface EditorState {

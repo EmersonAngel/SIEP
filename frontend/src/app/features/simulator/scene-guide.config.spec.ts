@@ -7,25 +7,23 @@ describe('scene-guide.config', () => {
     expect(getSceneGuide('does-not-exist')).toBeNull();
   });
 
-  it('provides a guide for each of the 5 playable SIM-VBG-001 nodes', () => {
+  it('keeps guide NPCs disabled for playable stages', () => {
     for (const nodeKey of [
-      'urgencias-crisis', 'ruta-proteccion', 'informe-integral',
-      'valoracion-comisaria', 'proteccion-nna',
+      'hospital-urgencias', 'hospital-sala-escucha', 'hospital-accion-etica',
+      'hospital-cierre-bloque', 'comisaria-consultorio', 'comisaria-accion-final',
     ]) {
-      const g = getSceneGuide(nodeKey);
-      expect(g).not.toBeNull();
-      expect(g!.guideKey).toBeTruthy();
-      expect(g!.targetKey).toMatch(/^tool-/);   // process pickup, never a decision object
-      expect(g!.hint.length).toBeGreaterThan(10);
+      expect(getSceneGuide(nodeKey)).toBeNull();
     }
   });
 
   it('has no guide for the terminal node (no objects to lead toward)', () => {
-    expect(getSceneGuide('cierre-seguimiento')).toBeNull();
+    expect(getSceneGuide('cierre-caso')).toBeNull();
   });
 
   it('never points at a known decision object key', () => {
     const decisionKeys = new Set([
+      'familia-duelo', 'marco-normativo-hospital', 'psicologa-acompanante',
+      'sobreviviente-consulta', 'marco-normativo-comisaria', 'profesional-psicosocial',
       'escucha-segura', 'cuestionario-prematuro', 'aviso-policial',
       'ruta-vbg', 'mediacion-prohibida', 'psiquiatria-aislada',
       'informe-integral', 'dsm-aislado', 'riesgo-estructurado',

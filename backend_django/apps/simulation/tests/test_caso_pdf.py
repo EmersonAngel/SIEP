@@ -7,8 +7,10 @@ comisaria-consultorio, con 6 decisiones canónicas.
 """
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from rest_framework.test import APIClient
 
+from apps.grupos.models import Grupo
 from apps.simulation.models import CaseVersion, DecisionOption
 
 User = get_user_model()
@@ -21,10 +23,24 @@ def cl(user):
 
 
 @pytest.fixture
-def estudiante(db):
-    return User.objects.create_user(
+def estudiante(db, case_version_id):
+    estudiante = User.objects.create_user(
         email="est_pdf@x.com", password="x", nombre="Est", apellido="Pdf", role="ESTUDIANTE"
     )
+    profesor = User.objects.create_user(
+        email="prof_pdf@x.com", password="x", nombre="Prof", apellido="Pdf", role="PROFESOR"
+    )
+    grupo = Grupo.objects.create(nombre="Grupo PDF", codigo="PDF", profesor=profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, estudiante.id],
+        )
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
+    return estudiante
 
 
 @pytest.fixture
@@ -158,18 +174,19 @@ def test_decision_hospital_recomendada_aplica_flags(estudiante, case_version_id)
     assert metrics["crisis_emocional"] < 50
 
 
-def test_decision_hospital_critica_aplica_flags_negativos(estudiante, case_version_id):
+def test_decision_hospital_critica_exige_reintento_sin_flags_negativos(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     _world(c, attempt_id, token)
     state = _decide(c, attempt_id, token, "h1-interrogar-victima", case_version_id)
     assert state["feedback"]["prohibitedConduct"] is True
+    assert state["currentNode"]["key"] == "hospital-urgencias"
     world = _world(c, attempt_id, token)
-    flags = world["flags"]["caseFlags"]
-    metrics = world["flags"]["caseMetrics"]
-    assert flags["interrogatorio_prematuro"] is True
-    assert metrics["etica_profesional"] < 50
-    assert metrics["riesgo_victima"] > 50
+    flags = world["flags"].get("caseFlags", {})
+    metrics = world["flags"].get("caseMetrics", {})
+    assert flags.get("interrogatorio_prematuro") is not True
+    assert metrics.get("etica_profesional", 50) == 50
+    assert metrics.get("riesgo_victima", 50) == 50
 
 
 def _play_hospital(c, attempt_id, token, case_version_id, h1, h2, h3):
@@ -193,18 +210,19 @@ def test_decision_comisaria_recomendada_aplica_flags(estudiante, case_version_id
     assert flags["asesoria_derechos_realizada"] is True
 
 
-def test_decision_comisaria_critica_aplica_flags_negativos(estudiante, case_version_id):
+def test_decision_comisaria_critica_exige_reintento_sin_flags_negativos(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     _play_hospital(c, attempt_id, token, case_version_id,
                    "h1-pap-contencion", "h2-459-1257", "h3-integral-psicosocial")
     state = _decide(c, attempt_id, token, "c1-mediacion-perdon", case_version_id)
     assert state["feedback"]["prohibitedConduct"] is True
+    assert state["currentNode"]["key"] == "hospital-cierre-bloque"
     world = _world(c, attempt_id, token)
     flags = world["flags"]["caseFlags"]
     metrics = world["flags"]["caseMetrics"]
-    assert flags["mediacion_agresor_intentada"] is True
-    assert metrics["riesgo_victima"] > 50
+    assert flags.get("mediacion_agresor_intentada") is not True
+    assert metrics["riesgo_victima"] <= 50
 
 
 # ─── Finales ──────────────────────────────────────────────────────────────────
@@ -236,8 +254,8 @@ def test_final_critico_con_dos_criticas(estudiante, case_version_id):
     c = cl(estudiante)
     attempt_id, token = _start(c, case_version_id)
     state = _play_full(c, attempt_id, token, case_version_id, [
-        "h1-interrogar-victima", "h2-solo-459", "h3-parcial-disonancia",
-        "c1-mediacion-perdon", "c2-eje-1448", "c3-parcial-clinica",
+        "h1-interrogar-victima", "h1-pap-contencion", "h2-solo-459", "h3-parcial-disonancia",
+        "c1-mediacion-perdon", "c1-riesgo-proteccion-derechos", "c2-eje-1448", "c3-parcial-clinica",
     ])
     assert state["status"] == "COMPLETED"
     ending = state["completionReport"]["ending"]

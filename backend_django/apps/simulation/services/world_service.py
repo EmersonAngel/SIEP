@@ -51,12 +51,15 @@ def get_world(attempt_id, attempt_token, actor):
 
 
 @transaction.atomic
-def update_position(attempt_id, attempt_token, player_x, player_y, actor):
+def update_position(attempt_id, attempt_token, player_x, player_y, actor,
+                    current_map_key=None):
     attempt = game_service._require_attempt(attempt_id, attempt_token, actor)
     _require_in_progress(attempt)
     world_state = require_world_state(attempt)
-    world_state.player_x = _clamp(player_x, 0, 960)
-    world_state.player_y = _clamp(player_y, 0, 540)
+    if current_map_key and current_map_key != world_state.scene_map.map_key:
+        return _to_world_state(attempt, world_state)
+    world_state.player_x = _clamp(player_x, 0, world_state.scene_map.width or 960)
+    world_state.player_y = _clamp(player_y, 0, world_state.scene_map.height or 540)
     world_state.save()
     _save_event(attempt, "WORLD_POSITION_UPDATED", "Posicion de jugador actualizada")
     return _to_world_state(attempt, world_state)
@@ -82,6 +85,16 @@ def open_interaction(attempt_id, attempt_token, interaction_key, actor):
         world_state.viewed_dialogue_keys_json = _append_unique(
             world_state.viewed_dialogue_keys_json, dialogue["key"]
         )
+        if map_object.object_type == "PERSON":
+            flags = _read_map(world_state.flags_json)
+            viewed = flags.get("viewedNpcKeys")
+            if not isinstance(viewed, list):
+                viewed = []
+            for key in (map_object.object_key, dialogue["key"]):
+                if key and key not in viewed:
+                    viewed.append(key)
+            flags["viewedNpcKeys"] = viewed
+            world_state.flags_json = _write_map(flags)
 
     unlocked_tool = None
     if map_object.tool_code and map_object.tool_code.strip():
@@ -148,6 +161,27 @@ def use_tool(attempt_id, attempt_token, tool_code, target_interaction_key, actor
         "stressDelta": stress_delta,
         "feedbackMessage": feedback_message,
     }
+
+
+@transaction.atomic
+def record_npc_interaction(attempt_id, attempt_token, npc_key, actor):
+    attempt = game_service._require_attempt(attempt_id, attempt_token, actor)
+    _require_in_progress(attempt)
+    npc_key = (npc_key or "").strip()
+    if not npc_key:
+        raise ValidationError("La clave del NPC es obligatoria")
+    world_state = require_world_state(attempt)
+    flags = _read_map(world_state.flags_json)
+    viewed = flags.get("viewedNpcKeys")
+    if not isinstance(viewed, list):
+        viewed = []
+    if npc_key not in viewed:
+        viewed.append(npc_key)
+    flags["viewedNpcKeys"] = viewed
+    world_state.flags_json = _write_map(flags)
+    world_state.save(update_fields=["flags_json", "updated_at"])
+    _save_event(attempt, "NPC_DIALOGUE_VIEWED", f"NPC escuchado: {npc_key}")
+    return _to_world_state(attempt, world_state)
 
 
 def world_for_attempt(attempt):
@@ -300,6 +334,8 @@ def _save_event(attempt, event_type, detail):
 # ─── DTO builders ─────────────────────────────────────────────────────────────
 def _to_world_state(attempt, state):
     scene_map = state.scene_map
+    inventory = _read_string_list(state.inventory_json)
+    inventory_set = set(inventory)
     return {
         "attemptId": str(attempt.id),
         "status": attempt.status,
@@ -320,6 +356,7 @@ def _to_world_state(attempt, state):
             for o in MapObject.objects.filter(
                 scene_map_id=scene_map.id, visible=True
             ).order_by("id")
+            if not (o.object_type == "TOOL" and o.tool_code and o.tool_code in inventory_set)
         ],
         "collisions": [
             _to_collision_zone(c)
@@ -331,7 +368,7 @@ def _to_world_state(attempt, state):
                 case_version_id=attempt.case_version_id, active=True
             ).order_by("id")
         ],
-        "inventory": _read_string_list(state.inventory_json),
+        "inventory": inventory,
         "inspectedObjectKeys": _read_string_list(state.inspected_object_keys_json),
         "viewedDialogueKeys": _read_string_list(state.viewed_dialogue_keys_json),
         "usedToolKeys": _read_string_list(state.used_tool_keys_json),

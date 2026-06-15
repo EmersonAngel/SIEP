@@ -48,23 +48,15 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
                 <button
                   type="button"
                   class="choice-btn"
-                  [class.choice-btn--recommended]="choice.isRecommended"
-                  [class.choice-btn--prohibited]="choice.isProhibited"
                   [class.choice-btn--chosen]="chosenKey() === choice.key"
                   [style.--stagger]="i"
-                  [attr.aria-label]="(i + 1) + '. ' + choice.text + (choice.isRecommended ? ' (recomendada)' : '') + (choice.isProhibited ? ' (contraindicada)' : '') + (choice.evidenceWarning ? ' (información incompleta)' : '')"
+                  [attr.aria-label]="(i + 1) + '. ' + choice.text + (choice.evidenceWarning ? ' (información incompleta)' : '')"
                   (mouseenter)="onChoiceHover()"
                   (click)="handleChoice(choice)">
                   <span class="choice-num" aria-hidden="true">{{ i + 1 }}</span>
                   <span class="choice-btn__icon" aria-hidden="true"></span>
                   <span class="choice-btn__body">
                     <span class="choice-btn__label">{{ choice.text }}</span>
-                    @if (choice.isRecommended) {
-                      <span class="choice-btn__meta">Recomendada</span>
-                    }
-                    @if (choice.isProhibited) {
-                      <span class="choice-btn__meta">Contraindicada</span>
-                    }
                     @if (choice.evidenceWarning) {
                       <span class="choice-btn__meta choice-btn__meta--evidence">Información incompleta</span>
                     }
@@ -262,22 +254,6 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       border: 2px solid currentColor;
       border-radius: 50%;
     }
-    .choice-btn--recommended .choice-btn__icon::before {
-      width: 12px;
-      height: 7px;
-      border-top: 0;
-      border-right: 0;
-      border-radius: 0;
-      transform: rotate(-45deg);
-    }
-    .choice-btn--prohibited .choice-btn__icon::before {
-      content: '!';
-      width: auto;
-      height: auto;
-      border: 0;
-      font-weight: 900;
-      line-height: 1;
-    }
     .choice-btn__body { display: grid; gap: 5px; min-width: 0; }
     .choice-btn__label { display: block; }
     .choice-btn__meta {
@@ -291,23 +267,10 @@ const TYPEWRITER_INTERVAL_MS = Math.round(1000 / CHARS_PER_SEC); // ~45ms
       text-transform: uppercase;
       opacity: .85;
     }
-    .choice-btn--recommended {
-      border-color: rgba(108,192,199,.5);
-      background: rgba(108,192,199,.12);
-      color: #bfeef1;
-    }
-    .choice-btn--recommended:hover { border-color: rgba(108,192,199,.85); background: rgba(108,192,199,.2); }
     .choice-btn__meta--evidence {
       border-color: rgba(245,184,75,.6);
       color: #f5d49b;
     }
-    .choice-btn--prohibited {
-      border-color: rgba(168,80,98,.45);
-      background: rgba(168,80,98,.08);
-      color: rgba(252,165,165,.88);
-    }
-    .choice-btn--prohibited:hover { border-color: rgba(168,80,98,.7); }
-
     .close-btn {
       align-self: flex-end;
       font-size: .88rem;
@@ -455,6 +418,12 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
 
     if (!this.isTypingComplete()) return;
 
+    if (e.key === 'Enter' && !d.choices.length) {
+      e.preventDefault();
+      this.close.emit();
+      return;
+    }
+
     // Digit keys: select choice by number
     if (d.choices.length) {
       const idx = digitIndex(e.key);
@@ -481,7 +450,7 @@ export class DialoguePanelComponent implements AfterViewChecked, OnDestroy {
   handleChoice(choice: DialogueChoiceState) {
     if (this.chosenKey() !== null) return;   // ya hay una elección en curso
     this.chosenKey.set(choice.key);
-    this.audio.playSfx(choice.isProhibited ? 'ui_cancel' : 'ui_confirm');
+    this.audio.playSfx('ui_confirm');
     // Pausa breve de confirmación: la card elegida se resalta antes de ejecutar.
     this.confirmHandle = setTimeout(() => {
       this.confirmHandle = null;

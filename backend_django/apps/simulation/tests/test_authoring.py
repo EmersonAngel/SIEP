@@ -80,6 +80,54 @@ def test_editor_returns_view(admin, published_cv):
         assert key in edge
 
 
+def test_authoring_case_list_includes_drafts(admin, published_cv):
+    a = cl(admin)
+    created = a.post(
+        BASE,
+        {"title": "Caso nuevo para lista", "description": "Borrador docente"},
+        format="json",
+    )
+    assert created.status_code == 200
+    new_id = created.data["data"]["caseVersionId"]
+
+    listed = a.get(BASE)
+
+    assert listed.status_code == 200
+    ids = {item["caseVersionId"] for item in listed.data["data"]}
+    assert published_cv in ids
+    assert new_id in ids
+
+
+def test_create_case_builds_editable_draft(admin):
+    resp = cl(admin).post(
+        BASE,
+        {
+            "title": "Caso de practica docente",
+            "code": "PRACTICA-DOCENTE",
+            "description": "Caso base creado desde el hub.",
+        },
+        format="json",
+    )
+
+    assert resp.status_code == 200
+    assert resp.data["message"] == "Caso creado"
+    data = resp.data["data"]
+    assert data["status"] == "DRAFT"
+    assert data["semanticVersion"] == "0.1.0"
+    assert data["title"] == "Caso de practica docente"
+    assert data["nodes"][0]["key"] == "inicio"
+    assert data["nodes"][0]["startNode"] is True
+    assert data["maps"][0]["key"] == "escena-inicial"
+    assert data["checklistCompletion"] == 0
+    version = CaseVersion.objects.get(pk=data["caseVersionId"])
+    assert version.simulation_case.code == "PRACTICA-DOCENTE"
+
+
+def test_create_case_forbidden_for_profesor(profesor):
+    resp = cl(profesor).post(BASE, {"title": "No permitido"}, format="json")
+    assert resp.status_code == 403
+
+
 # --- ensureDraft guard -----------------------------------------------------
 def test_mutation_on_published_400(admin, published_cv):
     resp = cl(admin).post(

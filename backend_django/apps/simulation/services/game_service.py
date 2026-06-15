@@ -3,7 +3,7 @@ import base64
 import hashlib
 import secrets
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
@@ -82,12 +82,48 @@ def _reissue_token(attempt):
     return raw
 
 
-def list_published_cases():
+def _assigned_case_version_ids(student_id):
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT gcv.case_version_id
+            FROM grupo_estudiante ge
+            INNER JOIN grupos g ON g.id = ge.grupo_id AND g.activo = TRUE
+            INNER JOIN grupo_case_version gcv ON gcv.grupo_id = ge.grupo_id
+            WHERE ge.estudiante_id = %s
+            """,
+            [student_id],
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def _student_can_access_case(student_id, case_version_id):
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM grupo_estudiante ge
+            INNER JOIN grupos g ON g.id = ge.grupo_id AND g.activo = TRUE
+            INNER JOIN grupo_case_version gcv ON gcv.grupo_id = ge.grupo_id
+            WHERE ge.estudiante_id = %s AND gcv.case_version_id = %s
+            LIMIT 1
+            """,
+            [student_id, case_version_id],
+        )
+        return cur.fetchone() is not None
+
+
+def list_published_cases(actor=None):
     versions = (
         CaseVersion.objects.filter(status="PUBLISHED", simulation_case__active=True)
         .select_related("simulation_case")
         .order_by("-published_at")
     )
+    if actor is not None and getattr(actor, "role", None) == "ESTUDIANTE":
+        assigned_ids = _assigned_case_version_ids(actor.id)
+        if not assigned_ids:
+            return []
+        versions = versions.filter(id__in=assigned_ids)
     result = []
     for v in versions:
         node_count = SimulationNode.objects.filter(case_version_id=v.id).count()
@@ -112,6 +148,8 @@ def _close_active_attempts(student_id, case_version_id, reason):
 @transaction.atomic
 def start_attempt(case_version_id, actor, force_new=False):
     version = _require_published(case_version_id)
+    if getattr(actor, "role", None) == "ESTUDIANTE" and not _student_can_access_case(actor.id, case_version_id):
+        raise PermissionDenied("El caso no ha sido asignado a tu grupo")
 
     if not force_new:
         active = (
@@ -197,6 +235,23 @@ def choose_decision(attempt_id, attempt_token, decision_option_id, actor):
         raise ValidationError("La decisión no pertenece al caso del intento")
 
     effects = decision_effects.resolve(decision)
+    retry_required = decision.prohibited_conduct or decision.classification == "INADEQUATE"
+    if retry_required:
+        message = (
+            "La intervención requiere revisar mejor la información disponible antes de continuar. "
+            "Puedes volver a responder esta escena."
+        )
+        event_type = (
+            "PROHIBITED_DECISION_RETRY_REQUIRED"
+            if decision.prohibited_conduct
+            else "DECISION_RETRY_REQUIRED"
+        )
+        # El intento queda trazado para revisión/rúbrica docente, pero no cambia
+        # métricas ni avanza el DAG hasta que el estudiante elija una ruta viable.
+        _save_event(attempt, event_type, decision.source_node, decision, 0, 0, message)
+        feedback = dto.feedback_dto(decision, effects, message)
+        return dto.attempt_state(attempt, attempt_token, feedback)
+
     decision_effects.apply(attempt, effects)
     # Efecto mariposa del caso: flags clínicos + métricas acumulativas (se
     # aplica ANTES de avanzar el nodo — el world state sigue sincronizado al

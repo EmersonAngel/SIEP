@@ -25,6 +25,14 @@ class _AdminView(APIView):
 
 
 # ─── Editor / publish / clone ────────────────────────────────────────────────
+class AdminCaseListCreateView(_AdminView):
+    def get(self, request):
+        return api_ok(svc.list_authoring_cases())
+
+    def post(self, request):
+        return api_ok(svc.create_case(request.data, request.user), "Caso creado")
+
+
 class EditorView(_AdminView):
     def get(self, request, case_version_id):
         return api_ok(svc.editor(case_version_id))

@@ -48,4 +48,15 @@ describe('AvatarFigureComponent pixel layers', () => {
     expect(avatarFramePosition('front')).toBe('0% 0%');
     expect(avatarFramePosition('side')).toBe('0% 50%');
   });
+
+  it('omite la capa de ojos/cara en la orientacion lateral', () => {
+    const layers = resolveAvatarSpriteLayers(defaultAvatar(), 'side');
+
+    expect(layers.map(layer => layer.key)).toEqual([
+      'hair-back-short-black',
+      'body',
+      'hair-front-short-black',
+    ]);
+    expect(layers.some(layer => layer.kind === 'face')).toBe(false);
+  });
 });

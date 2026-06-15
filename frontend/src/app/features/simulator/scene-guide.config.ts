@@ -25,6 +25,48 @@ export interface SceneGuideEntry {
 }
 
 export const SCENE_GUIDES: Record<string, SceneGuideEntry> = {
+  'hospital-urgencias': {
+    guideKey: 'guide-pdf-urgencias',
+    guideName: 'Enfermera de turno',
+    spawnX: 680, spawnY: 430,
+    targetKey: 'tool-pap',
+    hint: 'Antes de decidir, toma el kit PAP y observa la crisis familiar. El objetivo es contener sin apresurarte.',
+  },
+  'hospital-sala-escucha': {
+    guideKey: 'guide-pdf-marco-hospital',
+    guideName: 'Trabajadora social',
+    spawnX: 610, spawnY: 410,
+    targetKey: 'tool-spikes',
+    hint: 'Revisa el protocolo de noticias dificiles y el marco disponible. La guia orienta el proceso, no la respuesta.',
+  },
+  'hospital-accion-etica': {
+    guideKey: 'guide-pdf-accion-hospital',
+    guideName: 'Psicologa hospitalaria',
+    spawnX: 610, spawnY: 410,
+    targetKey: 'tool-spikes',
+    hint: 'Antes de cerrar la actuacion tecnica, revisa el protocolo y piensa en contencion, confidencialidad e interdisciplina.',
+  },
+  'hospital-cierre-bloque': {
+    guideKey: 'guide-pdf-riesgo',
+    guideName: 'Orientadora juridica',
+    spawnX: 660, spawnY: 430,
+    targetKey: 'tool-riesgo',
+    hint: 'En esta etapa importa valorar riesgo y proteccion. Toma el instrumento antes de decidir la prioridad psicosocial.',
+  },
+  'comisaria-consultorio': {
+    guideKey: 'guide-pdf-marco-comisaria',
+    guideName: 'Apoyo psicosocial',
+    spawnX: 660, spawnY: 430,
+    targetKey: 'tool-ruta',
+    hint: 'Revisa la ruta de proteccion y el marco institucional antes de formular la actuacion de la comisaria.',
+  },
+  'comisaria-accion-final': {
+    guideKey: 'guide-pdf-cierre-comisaria',
+    guideName: 'Apoyo psicosocial',
+    spawnX: 660, spawnY: 430,
+    targetKey: 'tool-riesgo',
+    hint: 'Para cerrar, contrasta riesgo, dependientes y rutas disponibles. La decision debe sostener seguridad y derechos.',
+  },
   'urgencias-crisis': {
     guideKey: 'guide-urgencias',
     guideName: 'Enfermera de turno',
@@ -63,6 +105,8 @@ export const SCENE_GUIDES: Record<string, SceneGuideEntry> = {
 };
 
 export function getSceneGuide(nodeKey: string | undefined | null): SceneGuideEntry | null {
-  if (!nodeKey) return null;
-  return SCENE_GUIDES[nodeKey] ?? null;
+  // Guides are disabled by default: the moving helper NPC looked like an
+  // unrelated orange character approaching the PAP tool.
+  void nodeKey;
+  return null;
 }
