@@ -10,5 +10,15 @@ class AgregarEstudianteSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class ImportarEstudiantesSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+    def validate_file(self, value):
+        name = (value.name or "").lower()
+        if not (name.endswith(".xlsx") or name.endswith(".csv")):
+            raise serializers.ValidationError("Carga un archivo .xlsx o .csv")
+        return value
+
+
 class AsignarCasoSerializer(serializers.Serializer):
     caseVersionId = serializers.IntegerField()

@@ -1,10 +1,16 @@
 from rest_framework.views import APIView
+from rest_framework.parsers import FormParser, MultiPartParser
 
 from shared.permissions import IsProfesor
 from shared.response import api_ok
 
 from . import services
-from .serializers import AgregarEstudianteSerializer, AsignarCasoSerializer, CrearGrupoSerializer
+from .serializers import (
+    AgregarEstudianteSerializer,
+    AsignarCasoSerializer,
+    CrearGrupoSerializer,
+    ImportarEstudiantesSerializer,
+)
 
 
 class GrupoListCreateView(APIView):
@@ -31,6 +37,17 @@ class GrupoEstudiantesView(APIView):
         ser.is_valid(raise_exception=True)
         dto = services.agregar_estudiante(pk, ser.validated_data["email"], request.user)
         return api_ok(dto, message="Estudiante agregado")
+
+
+class GrupoEstudiantesImportView(APIView):
+    permission_classes = [IsProfesor]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, pk):
+        ser = ImportarEstudiantesSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        dto = services.importar_estudiantes(pk, ser.validated_data["file"], request.user)
+        return api_ok(dto, message="Importación de estudiantes procesada")
 
 
 class GrupoCasosView(APIView):

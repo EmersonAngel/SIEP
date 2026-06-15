@@ -10,7 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { GrupoService, Grupo, GrupoEstudiante } from '../../core/api/grupo.service';
+import { GrupoService, Grupo, GrupoEstudiante, GrupoImportError, GrupoImportResult } from '../../core/api/grupo.service';
 import { mapAgregarEstudianteError } from '../../core/api/grupo-error.utils';
 import { SimulationService } from '../../core/api/simulation.service';
 import { SimulationCaseSummary } from '../../core/models/simulation.model';
@@ -108,6 +108,41 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
           <div class="detalle-grid">
             <section>
               <h3>Estudiantes del grupo</h3>
+              <div class="student-import">
+                <div class="student-import__copy">
+                  <strong>Cargar estudiantes por Excel</strong>
+                  <span>Columnas requeridas: nombre, apellido y email. La columna password es opcional.</span>
+                </div>
+                <label class="file-picker">
+                  <mat-icon aria-hidden="true">upload_file</mat-icon>
+                  <span>{{ importFileName() || 'Seleccionar .xlsx o .csv' }}</span>
+                  <input type="file" accept=".xlsx,.csv" (change)="seleccionarArchivoImportacion($event)">
+                </label>
+                <button class="psy-button psy-button--primary" type="button"
+                  [disabled]="!archivoImportacion() || importandoEstudiantes()"
+                  (click)="importarEstudiantes()">
+                  <mat-icon aria-hidden="true">group_add</mat-icon>
+                  {{ importandoEstudiantes() ? 'Cargando…' : 'Importar lista' }}
+                </button>
+              </div>
+              @if (resultadoImportacion(); as result) {
+                <div class="import-result" [class.import-result--warning]="result.errors.length">
+                  <strong>
+                    {{ result.assigned }} asignados · {{ result.created }} creados · {{ result.existing }} existentes
+                  </strong>
+                  <span>Contraseña por defecto para nuevos sin password: {{ result.defaultPassword }}</span>
+                  @if (result.errors.length) {
+                    <details>
+                      <summary>{{ result.errors.length }} filas con observaciones</summary>
+                      <ul>
+                        @for (item of result.errors; track item.row) {
+                          <li>Fila {{ item.row }} · {{ item.email || 'sin correo' }}: {{ item.error }}</li>
+                        }
+                      </ul>
+                    </details>
+                  }
+                </div>
+              }
               @if (!estudiantes().length) {
                 <p class="empty-state">Este grupo aun no tiene estudiantes.</p>
               } @else {
@@ -201,6 +236,66 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
     .grupo-detalle { margin-top: 16px; }
     .detalle-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 18px; align-items: start; }
     .detalle-grid h3 { margin: 0 0 10px; color: var(--psy-ink); font-size: 1rem; letter-spacing: 0; }
+    .student-import {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid rgba(0, 72, 118, .12);
+      border-radius: 10px;
+      background: rgba(255,255,255,.7);
+    }
+    .student-import__copy { display: grid; gap: 3px; }
+    .student-import__copy strong { color: var(--psy-ink); font-size: .9rem; }
+    .student-import__copy span { color: var(--psy-muted); font-size: .78rem; line-height: 1.4; }
+    .file-picker {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 8px 12px;
+      border: 1px dashed rgba(0, 72, 118, .32);
+      border-radius: 8px;
+      color: var(--psy-blue-deep);
+      background: rgba(255,255,255,.84);
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .file-picker input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .file-picker span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: .84rem;
+      font-weight: 800;
+    }
+    .import-result {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--psy-green-deep);
+      background: rgba(60, 140, 96, .1);
+      font-size: .84rem;
+      font-weight: 700;
+    }
+    .import-result--warning {
+      color: #7a4e00;
+      background: rgba(245,184,75,.16);
+    }
+    .import-result span { color: inherit; opacity: .82; font-size: .78rem; }
+    .import-result details { color: var(--psy-ink); }
+    .import-result summary { cursor: pointer; }
+    .import-result ul { margin: 6px 0 0; padding-left: 18px; color: #8f2f3d; }
+    .import-result li { margin: 3px 0; font-weight: 700; overflow-wrap: anywhere; }
     .detalle-list { display: grid; gap: 8px; }
     .detalle-row {
       display: flex;
@@ -243,12 +338,16 @@ export class GrupoListComponent implements OnInit {
   casosDisponibles = signal<SimulationCaseSummary[]>([]);
   casosAsignados = signal<SimulationCaseSummary[]>([]);
   mensajeEstudiante = signal('');
+  archivoImportacion = signal<File | null>(null);
+  resultadoImportacion = signal<GrupoImportResult | null>(null);
+  erroresImportacion = signal<GrupoImportError[]>([]);
   mensajeEsError = signal(false);
   loading = signal(true);
   detailLoading = signal(false);
   saving = signal(false);
   agregandoEstudiante = signal(false);
   asignandoCaso = signal(false);
+  importandoEstudiantes = signal(false);
   error = signal('');
   cols = ['nombre', 'codigo', 'estudiantes', 'acciones'];
 
@@ -301,6 +400,7 @@ export class GrupoListComponent implements OnInit {
     this.grupoSeleccionado.set(null);
     this.mensajeEstudiante.set('');
     this.mensajeEsError.set(false);
+    this.limpiarImportacion();
     this.cargarDetalle(grupo.id);
   }
 
@@ -310,6 +410,7 @@ export class GrupoListComponent implements OnInit {
     this.mensajeEstudiante.set('');
     this.mensajeEsError.set(false);
     this.estudianteForm.reset();
+    this.limpiarImportacion();
     this.cargarDetalle(grupo.id);
   }
 
@@ -359,6 +460,56 @@ export class GrupoListComponent implements OnInit {
         this.agregandoEstudiante.set(false);
       }
     });
+  }
+
+  importFileName(): string {
+    return this.archivoImportacion()?.name ?? '';
+  }
+
+  seleccionarArchivoImportacion(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.archivoImportacion.set(file);
+    this.resultadoImportacion.set(null);
+    this.erroresImportacion.set([]);
+    if (file && !/\.(xlsx|csv)$/i.test(file.name)) {
+      this.mensajeEstudiante.set('Selecciona un archivo .xlsx o .csv.');
+      this.mensajeEsError.set(true);
+      this.archivoImportacion.set(null);
+      input.value = '';
+    }
+  }
+
+  importarEstudiantes(): void {
+    const grupo = this.grupoActivo();
+    const file = this.archivoImportacion();
+    if (!grupo || !file || this.importandoEstudiantes()) return;
+
+    this.importandoEstudiantes.set(true);
+    this.mensajeEstudiante.set('');
+    this.mensajeEsError.set(false);
+    this.grupoService.importarEstudiantes(grupo.id, file).subscribe({
+      next: result => {
+        this.resultadoImportacion.set(result);
+        this.erroresImportacion.set(result.errors);
+        this.archivoImportacion.set(null);
+        this.importandoEstudiantes.set(false);
+        this.grupos.update(list => list.map(g => g.id === grupo.id ? result.grupo : g));
+        this.grupoActivo.set(result.grupo);
+        this.cargarDetalle(grupo.id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.mensajeEstudiante.set(err.error?.message || 'No fue posible importar el archivo.');
+        this.mensajeEsError.set(true);
+        this.importandoEstudiantes.set(false);
+      }
+    });
+  }
+
+  private limpiarImportacion(): void {
+    this.archivoImportacion.set(null);
+    this.resultadoImportacion.set(null);
+    this.erroresImportacion.set([]);
   }
 
   asignarCaso() {

@@ -19,6 +19,23 @@ export interface GrupoEstudiante {
   activo: boolean;
 }
 
+export interface GrupoImportError {
+  row: number;
+  email: string;
+  error: string;
+}
+
+export interface GrupoImportResult {
+  grupo: Grupo;
+  created: number;
+  existing: number;
+  assigned: number;
+  duplicated: number;
+  errors: GrupoImportError[];
+  students: GrupoEstudiante[];
+  defaultPassword: string;
+}
+
 interface ApiResponse<T> { data: T; message?: string | null; success?: boolean; }
 
 @Injectable({ providedIn: 'root' })
@@ -36,6 +53,13 @@ export class GrupoService {
 
   agregarEstudiante(grupoId: number, email: string) {
     return this.http.post<ApiResponse<Grupo>>(`${this.API}/${grupoId}/estudiantes`, { email })
+      .pipe(map(r => r.data));
+  }
+
+  importarEstudiantes(grupoId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ApiResponse<GrupoImportResult>>(`${this.API}/${grupoId}/estudiantes/import`, formData)
       .pipe(map(r => r.data));
   }
 

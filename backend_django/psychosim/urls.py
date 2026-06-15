@@ -2,13 +2,20 @@
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from apps.grupos.views import GrupoCasoDetailView, GrupoCasosView, GrupoEstudiantesView, GrupoListCreateView
+from apps.grupos.views import (
+    GrupoCasoDetailView,
+    GrupoCasosView,
+    GrupoEstudiantesImportView,
+    GrupoEstudiantesView,
+    GrupoListCreateView,
+)
 from apps.users.views import AdminUserDetailView, AdminUserListCreateView, AdminUserStatusView
 
 urlpatterns = [
     path("api/auth/", include("apps.users.urls")),
     path("api/grupos", GrupoListCreateView.as_view()),
     path("api/grupos/<int:pk>/estudiantes", GrupoEstudiantesView.as_view()),
+    path("api/grupos/<int:pk>/estudiantes/import", GrupoEstudiantesImportView.as_view()),
     path("api/grupos/<int:pk>/casos", GrupoCasosView.as_view()),
     path("api/grupos/<int:pk>/casos/<int:case_version_id>", GrupoCasoDetailView.as_view()),
     path("api/reportes", include("apps.reportes.urls")),

@@ -1,5 +1,8 @@
 import pytest
+import zipfile
+from io import BytesIO
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from apps.simulation.models import CaseVersion
@@ -41,6 +44,56 @@ def cl(user):
     return c
 
 
+def _xlsx_upload(rows, name="estudiantes.xlsx"):
+    ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+
+    def col_name(index):
+        index += 1
+        name = ""
+        while index:
+            index, rem = divmod(index - 1, 26)
+            name = chr(65 + rem) + name
+        return name
+
+    sheet_rows = []
+    for r_idx, row in enumerate(rows, start=1):
+        cells = []
+        for c_idx, value in enumerate(row):
+            ref = f"{col_name(c_idx)}{r_idx}"
+            safe = str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{safe}</t></is></c>')
+        sheet_rows.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
+
+    data = BytesIO()
+    with zipfile.ZipFile(data, "w") as zf:
+        zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""")
+        zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""")
+        zf.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Estudiantes" sheetId="1" r:id="rId1"/></sheets>
+</workbook>""")
+        zf.writestr("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""")
+        zf.writestr("xl/worksheets/sheet1.xml", f"""<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="{ns}"><sheetData>{''.join(sheet_rows)}</sheetData></worksheet>""")
+    return SimpleUploadedFile(
+        name,
+        data.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 def test_list_forbidden_for_estudiante(estudiante):
     assert cl(estudiante).get("/api/grupos").status_code == 403
 
@@ -78,6 +131,38 @@ def test_add_student_increments_total(profesor, estudiante):
     assert resp.status_code == 200
     assert resp.data["message"] == "Estudiante agregado"
     assert resp.data["data"]["totalEstudiantes"] == 1
+
+
+def test_import_students_from_xlsx_creates_and_assigns(profesor, estudiante):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "XLS1"}, format="json").data["data"]
+    upload = _xlsx_upload([
+        ["nombre", "apellido", "email", "password"],
+        ["Ana", "Rojas", "ana.rojas@x.com", "Clave1234"],
+        ["Luis", "Perez", "luis.perez@x.com", ""],
+        [estudiante.nombre, estudiante.apellido, estudiante.email, ""],
+        ["Ana", "Duplicada", "ana.rojas@x.com", ""],
+    ])
+
+    resp = cl(profesor).post(
+        f"/api/grupos/{grupo['id']}/estudiantes/import",
+        {"file": upload},
+        format="multipart",
+    )
+
+    assert resp.status_code == 200
+    data = resp.data["data"]
+    assert data["created"] == 2
+    assert data["existing"] == 1
+    assert data["assigned"] == 3
+    assert data["duplicated"] == 1
+    assert data["grupo"]["totalEstudiantes"] == 3
+    assert data["defaultPassword"] == "Siep2026!"
+    assert User.objects.get(email="ana.rojas@x.com").role == "ESTUDIANTE"
+    assert User.objects.get(email="luis.perez@x.com").check_password("Siep2026!")
+
+    students = cl(profesor).get(f"/api/grupos/{grupo['id']}/estudiantes").data["data"]
+    emails = {s["email"] for s in students}
+    assert {"ana.rojas@x.com", "luis.perez@x.com", estudiante.email} <= emails
 
 
 def test_list_students_in_group(profesor, estudiante):
