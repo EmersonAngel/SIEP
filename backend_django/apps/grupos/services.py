@@ -83,6 +83,11 @@ def listar_de_profesor(profesor_id):
     return [grupo_dto(g) for g in grupos]
 
 
+def listar_activos():
+    grupos = Grupo.objects.filter(activo=True).order_by("nombre", "codigo")
+    return [grupo_dto(g) for g in grupos]
+
+
 def _require_grupo(grupo_id, profesor):
     grupo = Grupo.objects.filter(pk=grupo_id).first()
     if not grupo:
