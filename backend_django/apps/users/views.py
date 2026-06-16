@@ -27,7 +27,7 @@ User = get_user_model()
 
 class GoogleAuthenticationError(APIException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    default_detail = "No fue posible iniciar sesiÃ³n con Google"
+    default_detail = "No fue posible iniciar sesión con Google"
     default_code = "google_auth_failed"
 
 
@@ -36,7 +36,7 @@ def verify_google_credential(credential, audience):
         from google.auth.transport import requests
         from google.oauth2 import id_token
     except ImportError as exc:
-        raise ValidationError("El proveedor de Google no estÃ¡ instalado en el backend") from exc
+        raise ValidationError("El proveedor de Google no está instalado en el backend") from exc
 
     try:
         return id_token.verify_oauth2_token(
@@ -78,7 +78,7 @@ class GoogleLoginView(APIView):
     def post(self, request):
         client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
         if not client_id:
-            raise ValidationError("El inicio de sesiÃ³n con Google no estÃ¡ configurado")
+            raise ValidationError("El inicio de sesión con Google no está configurado")
 
         ser = GoogleLoginSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -89,17 +89,17 @@ class GoogleLoginView(APIView):
 
         email = normalize_email_value(payload.get("email", ""))
         if not email:
-            raise GoogleAuthenticationError("La cuenta de Google no entregÃ³ un correo vÃ¡lido")
+            raise GoogleAuthenticationError("La cuenta de Google no entregó un correo válido")
 
         try:
             user = User.objects.filter(email=email).first()
         except Exception as exc:
             raise GoogleAuthenticationError(
-                "La cuenta de Google no estÃ¡ asociada a un usuario activo"
+                "La cuenta de Google no está asociada a un usuario activo"
             ) from exc
 
         if not user or not user.activo:
-            raise GoogleAuthenticationError("La cuenta de Google no estÃ¡ asociada a un usuario activo")
+            raise GoogleAuthenticationError("La cuenta de Google no está asociada a un usuario activo")
 
         return api_ok({
             "token": generate_access_token(user),

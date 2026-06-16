@@ -7,9 +7,11 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import connection
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.grupos.models import Grupo
 from apps.simulation.models import AuditLog, CaseVersion
 
 User = get_user_model()
@@ -20,6 +22,25 @@ def cl(user):
     c = APIClient()
     c.force_authenticate(user=user)
     return c
+
+
+def assign_case_to_student(estudiante, case_version_id, codigo="AUDIT-G"):
+    """Acceso del estudiante al caso (grupo activo + caso asignado)."""
+    profesor = User.objects.create_user(
+        email=f"prof_{codigo.lower()}@x.com", password="x",
+        nombre="Pro", apellido="Asig", role="PROFESOR",
+    )
+    grupo = Grupo.objects.create(nombre=f"Grupo {codigo}", codigo=codigo, profesor=profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, estudiante.id],
+        )
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
+    return grupo
 
 
 @pytest.fixture
@@ -43,6 +64,7 @@ def published_cv(db):
 
 # --- game-flow auditing ----------------------------------------------------
 def test_attempt_started_is_audited(estudiante, published_cv):
+    assign_case_to_student(estudiante, published_cv, "AUDIT-START")
     c = cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": published_cv}, format="json").data["data"]
     row = AuditLog.objects.filter(
@@ -56,6 +78,7 @@ def test_attempt_started_is_audited(estudiante, published_cv):
 
 
 def test_decision_is_audited_with_attempt_resource(estudiante, published_cv):
+    assign_case_to_student(estudiante, published_cv, "AUDIT-DEC")
     c = cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": published_cv}, format="json").data["data"]
     token, attempt_id = start["attemptToken"], start["attemptId"]

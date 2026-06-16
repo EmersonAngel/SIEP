@@ -45,6 +45,9 @@ from apps.simulation.models import (
 )
 
 CASE_CODE = "SIM-VBG-001"
+#: Casos legacy del mismo dominio que deben retirarse del catálogo al sembrar
+#: el canónico (evita que aparezcan casos de feminicidio duplicados).
+LEGACY_DUPLICATE_CASE_CODES = ("SOC-FEM-001",)
 CASE_TITLE = "Violencia Familiar y Tentativa de Feminicidio"
 CASE_DESCRIPTION = (
     "Caso formativo basado en el documento canónico de Psicología Social: "
@@ -1194,8 +1197,22 @@ class Command(BaseCommand):
             .update(status="ARCHIVED")
         )
 
+        # ── Retirar casos legacy duplicados del mismo dominio ────────────────
+        # SOC-FEM-001 es el caso de feminicidio previo (mismo PDF, código viejo)
+        # que quedaba publicado junto al canónico SIM-VBG-001. Se desactiva y se
+        # archivan sus versiones para que el catálogo muestre un único caso.
+        legacy_cases = SimulationCase.objects.filter(
+            code__in=LEGACY_DUPLICATE_CASE_CODES
+        ).exclude(pk=case.id)
+        legacy_versions_archived = CaseVersion.objects.filter(
+            simulation_case__in=legacy_cases, status="PUBLISHED"
+        ).update(status="ARCHIVED")
+        legacy_deactivated = legacy_cases.update(active=False)
+
         self.stdout.write(self.style.SUCCESS(
             f"Caso PDF sembrado: versión {version.semantic_version} (id {version.id}) — "
             f"{len(nodes)} nodos, {len(option_by_key)} opciones, {len(MAPS)} mapas, "
-            f"{n_objects} objetos ({n_doors} puertas). Versiones archivadas: {archived}."
+            f"{n_objects} objetos ({n_doors} puertas). Versiones archivadas: {archived}. "
+            f"Casos legacy retirados: {legacy_deactivated} "
+            f"(versiones archivadas: {legacy_versions_archived})."
         ))

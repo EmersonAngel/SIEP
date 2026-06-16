@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.simulation.views.game_views import (
     ActiveAttemptView,
+    AttemptHistoryView,
     AttemptView,
     CasesView,
     CatalogView,
@@ -14,6 +15,7 @@ from apps.simulation.views.game_views import (
     ReflectionsView,
     SafeExitView,
     StartAttemptView,
+    StudentReportView,
     ToolUseView,
     WorldStateView,
     WorldView,
@@ -25,7 +27,9 @@ urlpatterns = [
     path("/cases", CasesView.as_view()),
     path("/cases/<int:case_version_id>/active-attempt", ActiveAttemptView.as_view()),
     path("/attempts", StartAttemptView.as_view()),
+    path("/attempts/history", AttemptHistoryView.as_view()),
     path("/attempts/<uuid:attempt_id>", AttemptView.as_view()),
+    path("/attempts/<uuid:attempt_id>/student-report", StudentReportView.as_view()),
     path("/attempts/<uuid:attempt_id>/completion-report", CompletionReportView.as_view()),
     path("/attempts/<uuid:attempt_id>/progress-map", ProgressMapView.as_view()),
     path("/attempts/<uuid:attempt_id>/decisions", DecisionsView.as_view()),

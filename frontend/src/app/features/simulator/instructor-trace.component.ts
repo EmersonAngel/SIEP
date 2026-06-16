@@ -153,7 +153,7 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
                       </div>
                       <small>
                         Inicio {{ formatDate(phase.startedAt) }}
-                        @if (phase.endedAt) { Â· Fin {{ formatDate(phase.endedAt) }} }
+                        @if (phase.endedAt) { · Fin {{ formatDate(phase.endedAt) }} }
                       </small>
                     </div>
                   </article>

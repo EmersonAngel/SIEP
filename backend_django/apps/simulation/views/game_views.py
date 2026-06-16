@@ -69,6 +69,20 @@ class CompletionReportView(APIView):
         return api_ok(game_service.get_completion_report(attempt_id, token, request.user))
 
 
+class AttemptHistoryView(APIView):
+    permission_classes = [IsEstudianteOrAdmin]
+
+    def get(self, request):
+        return api_ok(game_service.list_attempt_history(request.user))
+
+
+class StudentReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+        return api_ok(game_service.get_student_report(attempt_id, request.user))
+
+
 class ProgressMapView(APIView):
     permission_classes = [IsAuthenticated]
 

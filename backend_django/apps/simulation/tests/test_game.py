@@ -295,3 +295,53 @@ def test_completion_report_includes_timeline(estudiante, case_version_id):
     assert isinstance(entry["scoreDelta"], int)
     assert isinstance(entry["stressDelta"], int)
     assert report["totalDurationSeconds"] is None or report["totalDurationSeconds"] >= 0
+
+
+def test_attempt_history_lists_own_attempts(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-HIST")
+    c = cl(estudiante)
+    attempt = c.post("/api/simulation/attempts",
+                     {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    attempt_id, token = attempt["attemptId"], attempt["attemptToken"]
+    option_id = next(
+        o for o in attempt["currentNode"]["options"] if o["classification"] == "ADEQUATE"
+    )["id"]
+    c.post(f"/api/simulation/attempts/{attempt_id}/decisions",
+           {"attemptToken": token, "decisionOptionId": option_id}, format="json")
+
+    resp = c.get("/api/simulation/attempts/history")
+    assert resp.status_code == 200
+    history = resp.data["data"]
+    mine = next((h for h in history if h["attemptId"] == attempt_id), None)
+    assert mine is not None
+    assert mine["caseVersionId"] == case_version_id
+    assert mine["adequateDecisions"] >= 1
+    assert "startedAt" in mine
+
+
+def test_student_report_returns_completion_report(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-SREPORT")
+    c = cl(estudiante)
+    attempt = c.post("/api/simulation/attempts",
+                     {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    attempt_id, token = attempt["attemptId"], attempt["attemptToken"]
+    c.post(f"/api/simulation/attempts/{attempt_id}/safe-exit",
+           {"attemptToken": token, "reason": "test"}, format="json")
+
+    resp = c.get(f"/api/simulation/attempts/{attempt_id}/student-report")
+    assert resp.status_code == 200
+    report = resp.data["data"]
+    assert report["attemptId"] == attempt_id
+    assert "timeline" in report and "metrics" in report
+
+
+def test_student_report_denies_other_students(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-SREPORT2")
+    owner_client = cl(estudiante)
+    attempt = owner_client.post("/api/simulation/attempts",
+                                {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    other = User.objects.create_user(
+        email="otro_est@x.com", password="x", nombre="Otro", apellido="Est", role="ESTUDIANTE"
+    )
+    resp = cl(other).get(f"/api/simulation/attempts/{attempt['attemptId']}/student-report")
+    assert resp.status_code == 403

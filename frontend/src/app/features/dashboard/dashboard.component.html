@@ -44,7 +44,7 @@
           </div>
         </div>
         <dl class="hero-status-card__metrics">
-          @for (item of statusCard.items; track item.label) {
+          @for (item of statusCard.items; track $index) {
             <div class="hero-status-card__metric">
               <dt>{{ item.label }}</dt>
               <dd>{{ item.value }}</dd>

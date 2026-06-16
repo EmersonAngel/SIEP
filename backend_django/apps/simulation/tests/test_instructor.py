@@ -3,8 +3,10 @@ Contract-faithful to Spring InstructorSimulationController + InstructorSimulatio
 All endpoints PROFESOR/ADMIN; reflections in the trace are decrypted for review."""
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from rest_framework.test import APIClient
 
+from apps.grupos.models import Grupo
 from apps.simulation.models import CaseVersion
 
 User = get_user_model()
@@ -14,6 +16,26 @@ def cl(user):
     c = APIClient()
     c.force_authenticate(user=user)
     return c
+
+
+def assign_case_to_student(estudiante, case_version_id, codigo="INST-G"):
+    """Da acceso al estudiante: grupo activo con el caso asignado (requerido por
+    la regla de acceso de start_attempt)."""
+    profesor = User.objects.create_user(
+        email=f"prof_{codigo.lower()}@x.com", password="x",
+        nombre="Pro", apellido="Asig", role="PROFESOR",
+    )
+    grupo = Grupo.objects.create(nombre=f"Grupo {codigo}", codigo=codigo, profesor=profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, estudiante.id],
+        )
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
+    return grupo
 
 
 @pytest.fixture
@@ -35,7 +57,9 @@ def case_version_id(db):
     return CaseVersion.objects.get(simulation_case__code="SIM-VBG-001", status="PUBLISHED").id
 
 
-def _play_one_decision(client, case_version_id):
+def _play_one_decision(estudiante, case_version_id, codigo="INST"):
+    assign_case_to_student(estudiante, case_version_id, codigo)
+    client = cl(estudiante)
     start = client.post(
         "/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json"
     ).data["data"]
@@ -62,7 +86,7 @@ def test_recent_forbidden_for_estudiante(estudiante):
 
 
 def test_recent_attempts_lists(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(cl(estudiante), case_version_id)
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-REC")
     resp = cl(profesor).get("/api/instructor/attempts/recent")
     assert resp.status_code == 200
     ids = [a["attemptId"] for a in resp.data["data"]]
@@ -74,7 +98,7 @@ def test_recent_attempts_lists(estudiante, profesor, case_version_id):
 
 # --- trace -----------------------------------------------------------------
 def test_trace_has_events_world_and_decrypted_reflection(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(cl(estudiante), case_version_id)
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-TRACE")
     resp = cl(profesor).get(f"/api/instructor/attempts/{attempt_id}/trace")
     assert resp.status_code == 200
     trace = resp.data["data"]
@@ -94,7 +118,7 @@ def test_trace_missing_attempt_404(profesor):
 
 # --- rubric evaluation -----------------------------------------------------
 def test_rubric_get_returns_criteria(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(cl(estudiante), case_version_id)
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBGET")
     resp = cl(profesor).get(f"/api/instructor/attempts/{attempt_id}/rubric-evaluation")
     assert resp.status_code == 200
     view = resp.data["data"]
@@ -105,7 +129,7 @@ def test_rubric_get_returns_criteria(estudiante, profesor, case_version_id):
 
 
 def test_save_rubric_evaluation(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(cl(estudiante), case_version_id)
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBSAVE")
     p = cl(profesor)
     view = p.get(f"/api/instructor/attempts/{attempt_id}/rubric-evaluation").data["data"]
     rubric_id = view["rubricId"]
