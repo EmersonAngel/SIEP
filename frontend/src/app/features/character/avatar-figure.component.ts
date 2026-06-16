@@ -36,10 +36,15 @@ export function avatarFramePosition(pose: AvatarPreviewPose): string {
   return pose === 'side' ? '0% 50%' : '0% 0%';
 }
 
-export function resolveAvatarSpriteLayers(config: AvatarConfig, _pose: AvatarPreviewPose = 'front'): AvatarSpriteLayer[] {
+export function resolveAvatarSpriteLayers(config: AvatarConfig, pose: AvatarPreviewPose = 'front'): AvatarSpriteLayer[] {
   const face = faceId(config);
   const variant = hairVariantId(config);
   const layers: AvatarSpriteLayer[] = [];
+
+  // Lateral: el rostro de perfil va SOBRE el flequillo (si no, el cabello lo
+  // tapa). De frente el flequillo cae sobre la frente (rostro debajo).
+  const faceZ = pose === 'side' ? 45 : 30;
+  const hairFrontZ = pose === 'side' ? 40 : 40;
 
   if (variant !== 'none') {
     const variantKey = variant.replace(/_/g, '-');
@@ -53,11 +58,11 @@ export function resolveAvatarSpriteLayers(config: AvatarConfig, _pose: AvatarPre
     10,
   ));
 
-  layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, 30));
+  layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, faceZ));
 
   if (variant !== 'none') {
     const variantKey = variant.replace(/_/g, '-');
-    layers.push(layer(`hair-front-${variantKey}`, 'hairFront', `${MODULAR_ASSET_BASE}/hair/hair_${variant}_front.png`, 40));
+    layers.push(layer(`hair-front-${variantKey}`, 'hairFront', `${MODULAR_ASSET_BASE}/hair/hair_${variant}_front.png`, hairFrontZ));
   }
 
   return layers;

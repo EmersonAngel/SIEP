@@ -76,8 +76,11 @@ export function avatarLayerSpecs(config: AvatarConfig): AvatarLayerSpec[] {
  * cráneo. La cara va sobre el cuerpo y el flequillo cierra.
  */
 export function avatarRowLayerOrder(row: number): readonly AvatarLayerKind[] {
+  // Frente: el flequillo va SOBRE el rostro (cae sobre la frente).
   if (row === 0) return ['hairBack', 'body', 'face', 'hairFront'];
-  if (row === 1) return ['hairBack', 'body', 'face', 'hairFront'];
+  // Lateral: el rostro (ojo/nariz de perfil) va SOBRE el flequillo para que el
+  // cabello no tape la cara de perfil.
+  if (row === 1) return ['hairBack', 'body', 'hairFront', 'face'];
   return ['body', 'hairBack', 'hairFront'];
 }
 

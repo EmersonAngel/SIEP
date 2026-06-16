@@ -32,9 +32,9 @@ describe('phaser-avatar-renderer', () => {
     }
   });
 
-  it('de frente/lado el pelo trasero va detras del cuerpo; de espaldas, encima', () => {
+  it('de frente el flequillo va sobre el rostro; de lado el rostro va sobre el flequillo; de espaldas solo pelo', () => {
     expect(avatarRowLayerOrder(0)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
-    expect(avatarRowLayerOrder(1)).toEqual(['hairBack', 'body', 'face', 'hairFront']);
+    expect(avatarRowLayerOrder(1)).toEqual(['hairBack', 'body', 'hairFront', 'face']);
     expect(avatarRowLayerOrder(2)).toEqual(['body', 'hairBack', 'hairFront']);
   });
 
