@@ -1,15 +1,24 @@
 :host {
   display: block;
-  --landing-navy: #0c1222;
-  --landing-navy-soft: #151d32;
-  --landing-purple: #7c3aed;
-  --landing-purple-light: #a78bfa;
-  --landing-purple-glow: rgba(124, 58, 237, 0.35);
-  --landing-ink: #0f172a;
-  --landing-muted: #64748b;
-  --landing-border: #e2e8f0;
-  --landing-surface: #ffffff;
-  --landing-muted-bg: #f8fafc;
+  --siep-deep: #1e1b4b;
+  --siep-primary: #6d28d9;
+  --siep-lavender: #c4b5fd;
+  --siep-info: #6366f1;
+  --siep-text: #111827;
+  --siep-muted: #6b6478;
+  --siep-border: #ddd6fe;
+  --siep-card: #fffbf5;
+  --siep-bg: #f5f3ff;
+  --landing-navy: var(--siep-deep, #1e1b4b);
+  --landing-navy-soft: #2e1065;
+  --landing-purple: var(--siep-primary, #6d28d9);
+  --landing-purple-light: var(--siep-lavender, #c4b5fd);
+  --landing-purple-glow: rgba(109, 40, 217, 0.35);
+  --landing-ink: var(--siep-text, #111827);
+  --landing-muted: var(--siep-muted, #6b6478);
+  --landing-border: var(--siep-border, #ddd6fe);
+  --landing-surface: var(--siep-card, #fffbf5);
+  --landing-muted-bg: var(--siep-bg, #f5f3ff);
   --landing-radius: 16px;
   --landing-radius-lg: 20px;
   --landing-max: 1140px;
@@ -26,17 +35,33 @@
 }
 
 .landing-accent {
-  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 50%, #c084fc 100%);
+  background: linear-gradient(135deg, var(--siep-lavender) 0%, var(--siep-primary) 50%, #a78bfa 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .landing-accent--dark {
-  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  background: linear-gradient(135deg, var(--siep-primary), var(--siep-info));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.siep-fade-up {
+  animation: siep-fade-up 680ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes siep-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Nav ─────────────────────────────────────────────────── */
@@ -236,6 +261,7 @@
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: -0.02em;
+  color: #f5f3ff;
 }
 
 .landing-hero__lead {
@@ -926,6 +952,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .siep-fade-up {
+    animation: none;
+  }
+
   .landing-case-card:hover {
     transform: none;
   }

@@ -18,37 +18,37 @@ psico_project_v2/
 ## Requisitos previos
 
 - **Docker Desktop** (para la base de datos)
-- **Python 3.12** con virtualenv en `backend_django/.venv/`
+- **Python 3.12 o 3.13** (en Windows: `py install 3.12`)
 - **Node 18+** / npm
 
 ## Arranque rápido
 
-### 1. Base de datos (PostgreSQL)
+Desde la raíz del monorepo, un solo comando levanta **PostgreSQL + Django + Angular**:
+
+```powershell
+npm run up
+```
+
+El script:
+1. Inicia PostgreSQL en Docker (`localhost:5433`)
+2. Crea `.venv` e instala dependencias Python si hace falta
+3. Genera `local.py` de desarrollo si no existe
+4. Arranca el backend en `http://localhost:8091` (Swagger: `/swagger-ui.html`)
+5. Arranca el frontend en `http://localhost:4200` (proxy automático a la API)
+
+Para detener backend y frontend: `Ctrl+C`. La base de datos sigue en Docker; para pararla:
+
+```powershell
+npm run down
+```
+
+### Arranque manual (opcional)
 
 ```powershell
 docker compose up -d db
+cd backend_django && ./.venv/Scripts/python.exe manage.py runserver 8091
+cd frontend && npm install && npm start
 ```
-
-Postgres disponible en `localhost:5433`, base de datos `psychosim`.
-
-### 2. Backend Django
-
-```powershell
-cd backend_django
-./.venv/Scripts/python.exe manage.py runserver 8091
-```
-
-API disponible en `http://localhost:8091`. Docs en `http://localhost:8091/swagger-ui.html`.
-
-### 3. Frontend Angular
-
-```powershell
-cd frontend
-npm install
-npm start
-```
-
-App disponible en `http://localhost:4200` (proxy automático a la API en `:8091`).
 
 ## Credenciales demo
 

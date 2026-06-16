@@ -1,0 +1,11 @@
+{
+  "name": "siep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SIEP — Sistema de Entrenamiento Psicosocial",
+  "scripts": {
+    "up": "node scripts/dev-up.mjs",
+    "down": "docker compose stop db",
+    "install:all": "npm install --prefix frontend"
+  }
+}
