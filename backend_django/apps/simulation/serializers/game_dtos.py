@@ -81,7 +81,7 @@ def node_state(node, include_options):
     }
 
 
-def feedback_dto(decision, effects, message):
+def feedback_dto(decision, effects, message, retry_required=False):
     return {
         "classification": decision.classification,
         "scoreDelta": effects.score_delta,
@@ -93,6 +93,9 @@ def feedback_dto(decision, effects, message):
         "revictimizationRisk": effects.revictimization_risk,
         "message": message,
         "prohibitionReason": decision.prohibition_reason,
+        # True solo mientras quede una oportunidad (no se aplicó ni avanzó nada);
+        # en la 2ª respuesta riesgosa/inadecuada queda registrada y va en False.
+        "retryRequired": retry_required,
     }
 
 
