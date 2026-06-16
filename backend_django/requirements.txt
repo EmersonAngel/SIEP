@@ -9,6 +9,10 @@ cryptography==43.0.3
 drf-spectacular==0.27.2
 bcrypt==4.2.0
 google-auth==2.40.3
+# Producción / despliegue (Railway)
+gunicorn==23.0.0
+whitenoise==6.7.0
+dj-database-url==2.2.0
 # Dev/test
 pytest==8.3.3
 pytest-django==4.8.0

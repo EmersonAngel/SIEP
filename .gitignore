@@ -43,5 +43,9 @@ frontend/src/environments/environment.prod.ts
 backend_django/psychosim/settings/local.py
 backend_django/media/
 
+# Build de Angular copiado al backend para servir el SPA (lo genera el Dockerfile)
+backend_django/frontend_dist/
+backend_django/staticfiles/
+
 # Docker / env
 # (*.env ya está cubierto por `.env.*` en la sección "Env / secrets" arriba)

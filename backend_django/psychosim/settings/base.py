@@ -33,6 +33,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise sirve los estáticos del SPA (Angular) y del backend en
+    # producción sin necesidad de un servidor web aparte.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     # Binds the request to a thread-local for audit-trail actor/IP capture.
@@ -53,16 +57,26 @@ TEMPLATES = [
 AUTH_USER_MODEL = "users.CustomUser"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "psychosim"),
-        "USER": os.environ.get("DB_USER", "psychosim"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "psychosim_secret"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5433"),
+# En Railway (y otros PaaS) la base de datos se inyecta como DATABASE_URL.
+# Si existe, se usa; si no, se arma con las variables DB_* (desarrollo local).
+_DATABASE_URL = os.environ.get("DATABASE_URL")
+if _DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        "default": dj_database_url.parse(_DATABASE_URL, conn_max_age=600),
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME", "psychosim"),
+            "USER": os.environ.get("DB_USER", "psychosim"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", "psychosim_secret"),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5433"),
+        }
+    }
 
 # Spring uses BCrypt ($2a/$2b). Keep BCrypt first so newly created users are
 # written in a format Spring can also verify; CustomUser.check_password also
@@ -129,3 +143,16 @@ USE_I18N = True
 # Spring uses LocalDateTime and the columns are "timestamp without time zone";
 # keep datetimes naive so the JSON contract matches Spring exactly.
 USE_TZ = False
+
+# ── Archivos estáticos / SPA (Angular) servidos por WhiteNoise ───────────────
+# Los estáticos propios de Django (p. ej. swagger) se recogen en STATIC_ROOT.
+STATIC_URL = "/django-static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# El build de Angular se copia a backend_django/frontend_dist en el contenedor.
+# Si existe, WhiteNoise lo sirve en la raíz (index.html incluido); las rutas del
+# SPA que no son archivos caen en el catch-all de urls.py.
+SPA_DIST_DIR = BASE_DIR / "frontend_dist"
+if SPA_DIST_DIR.exists():
+    WHITENOISE_ROOT = str(SPA_DIST_DIR)
+    WHITENOISE_INDEX_FILE = True

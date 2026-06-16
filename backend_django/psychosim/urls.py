@@ -1,6 +1,20 @@
 """Root URL dispatcher. App includes are added as each module is implemented."""
-from django.urls import include, path
+from django.conf import settings
+from django.http import Http404, HttpResponse
+from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+
+def spa_index(request):
+    """Sirve el index.html del SPA (Angular) para las rutas del cliente.
+
+    WhiteNoise sirve los archivos que existen (assets, JS); las rutas de Angular
+    que no son archivos (p. ej. /portal/personaje al recargar) llegan aquí.
+    """
+    index_path = getattr(settings, "SPA_DIST_DIR", None)
+    if index_path is None or not (index_path / "index.html").exists():
+        raise Http404("SPA build not available")
+    return HttpResponse((index_path / "index.html").read_bytes(), content_type="text/html")
 
 from apps.grupos.views import (
     GrupoCasoDetailView,
@@ -49,4 +63,7 @@ urlpatterns = [
     path("api/rubrics/", include("apps.simulation.urls_rubrics")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("swagger-ui.html", SpectacularSwaggerView.as_view(url_name="schema")),
+    # Catch-all del SPA (debe ir al final): cualquier ruta que no sea API,
+    # schema o swagger devuelve el index.html de Angular.
+    re_path(r"^(?!api/|schema/|swagger-ui|django-static/).*$", spa_index),
 ]

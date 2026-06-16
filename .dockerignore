@@ -1,0 +1,14 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+frontend/dist
+frontend/.angular
+backend_django/staticfiles
+backend_django/frontend_dist
+.git
+.github
+**/.pytest_cache
+**/coverage
+e2e
+*.log
