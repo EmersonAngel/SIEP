@@ -7,11 +7,27 @@
     <span>{{ brand.institution }}</span>
   </a>
 
-  <div class="auth-container" [class.active]="showRegister()" id="container">
+  <div
+    class="auth-container"
+    [class.active]="showRegister()"
+    [style.--login-role-accent]="activeRole().accent"
+    [style.--login-role-accent-soft]="activeRole().accentSoft"
+    id="container"
+  >
     <div class="form-container sign-up">
       <form [formGroup]="registerForm" (ngSubmit)="onRegisterSubmit()" novalidate>
+        <div class="auth-brand">
+          <span class="auth-brand__icon" aria-hidden="true">
+            <mat-icon>psychology</mat-icon>
+          </span>
+          <div class="auth-brand__text">
+            <strong>{{ brand.shortName }}</strong>
+            <span>{{ brand.program }}</span>
+          </div>
+        </div>
+
         <h1>Solicitar acceso</h1>
-        <span>o usa tu correo institucional si ya tienes cuenta</span>
+        <p class="auth-subtitle">Completa tus datos institucionales para solicitar la activación de tu cuenta.</p>
 
         <input type="text" placeholder="Nombre" formControlName="nombre" autocomplete="given-name" />
         @if (registerForm.controls.nombre.touched && registerForm.controls.nombre.hasError('required')) {
@@ -34,36 +50,70 @@
         @if (registerNotice()) {
           <p class="auth-notice" role="status">{{ registerNotice() }}</p>
         }
+        @if (registerError()) {
+          <p class="auth-error" role="alert">{{ registerError() }}</p>
+        }
+        @if (registerLoading()) {
+          <mat-progress-bar mode="indeterminate" aria-label="Enviando solicitud"></mat-progress-bar>
+        }
 
-        <button type="submit">Enviar solicitud</button>
+        <button type="submit" class="auth-submit" [disabled]="registerForm.invalid || registerLoading()">Enviar solicitud</button>
         <button type="button" class="auth-link-btn" (click)="openSignIn()">Ya tengo cuenta</button>
       </form>
     </div>
 
     <div class="form-container sign-in">
       <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
-        <h1>Iniciar sesión</h1>
-        <span>Accede con tu correo institucional</span>
-
-        <div class="auth-social-icons" aria-label="Accesos institucionales">
-          <button type="button" class="auth-social-btn" aria-label="Continuar con Google" (click)="onGoogleSso()">
-            <mat-icon>account_circle</mat-icon>
-          </button>
-          <button type="button" class="auth-social-btn" aria-label="Continuar con Microsoft" (click)="onMicrosoftSso()">
-            <mat-icon>business</mat-icon>
-          </button>
-          <a class="auth-social-btn" href="mailto:secretariapsicologia@cue.edu.co" aria-label="Contactar soporte">
-            <mat-icon>mail</mat-icon>
-          </a>
+        <div class="auth-brand">
+          <span class="auth-brand__icon" aria-hidden="true">
+            <mat-icon>psychology</mat-icon>
+          </span>
+          <div class="auth-brand__text">
+            <strong>{{ brand.shortName }}</strong>
+            <span>{{ brand.program }}</span>
+          </div>
         </div>
 
-        <input
-          id="login-email"
-          type="email"
-          placeholder="Correo institucional"
-          formControlName="email"
-          autocomplete="email"
-        />
+        <h1>Iniciar sesión</h1>
+        <p class="auth-subtitle">Selecciona tu perfil e ingresa con tu correo institucional.</p>
+
+        <div class="auth-role-picker" role="radiogroup" aria-label="Seleccionar rol de acceso">
+          @for (role of roles; track role.id) {
+            <button
+              type="button"
+              class="auth-role-card"
+              [class.auth-role-card--active]="selectedRole() === role.id"
+              [attr.aria-pressed]="selectedRole() === role.id"
+              [style.--role-accent]="role.accent"
+              [style.--role-accent-soft]="role.accentSoft"
+              (click)="selectRole(role.id)"
+            >
+              <mat-icon aria-hidden="true">{{ role.icon }}</mat-icon>
+              <span>{{ role.label }}</span>
+            </button>
+          }
+        </div>
+
+        <p class="auth-role-hint">{{ activeRole().hint }}</p>
+
+        @if (isDev) {
+          <div class="auth-demo-hint">
+            <span>Credenciales demo ({{ activeRole().label }}):</span>
+            <code>{{ activeRole().demoEmail }}</code>
+            <button type="button" class="auth-demo-fill" (click)="fillDemoCredentials()">Usar demo</button>
+          </div>
+        }
+
+        <label class="auth-field" for="login-email">
+          <span>Correo institucional</span>
+          <input
+            id="login-email"
+            type="email"
+            [placeholder]="activeRole().emailPlaceholder"
+            formControlName="email"
+            autocomplete="email"
+          />
+        </label>
         @if (form.controls.email.touched && form.controls.email.hasError('required')) {
           <span class="auth-error" role="alert">El correo es obligatorio.</span>
         }
@@ -71,56 +121,118 @@
           <span class="auth-error" role="alert">Ingresa un correo institucional válido.</span>
         }
 
-        <div class="auth-password-wrap">
-          <input
-            id="login-password"
-            [type]="hidePassword() ? 'password' : 'text'"
-            placeholder="Contraseña"
-            formControlName="password"
-            autocomplete="current-password"
-          />
-          <button
-            type="button"
-            class="auth-password-toggle"
-            [attr.aria-label]="hidePassword() ? 'Mostrar contraseña' : 'Ocultar contraseña'"
-            (click)="hidePassword.set(!hidePassword())"
-          >
-            <mat-icon aria-hidden="true">{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
-          </button>
-        </div>
+        <label class="auth-field" for="login-password">
+          <span>Contraseña</span>
+          <div class="auth-password-wrap">
+            <input
+              id="login-password"
+              [type]="hidePassword() ? 'password' : 'text'"
+              placeholder="Tu contraseña"
+              formControlName="password"
+              autocomplete="current-password"
+            />
+            <button
+              type="button"
+              class="auth-password-toggle"
+              [attr.aria-label]="hidePassword() ? 'Mostrar contraseña' : 'Ocultar contraseña'"
+              (click)="hidePassword.set(!hidePassword())"
+            >
+              <mat-icon aria-hidden="true">{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+            </button>
+          </div>
+        </label>
         @if (form.controls.password.touched && form.controls.password.hasError('required')) {
           <span class="auth-error" role="alert">La contraseña es obligatoria.</span>
         }
 
-        <label class="auth-remember">
-          <input type="checkbox" formControlName="remember" />
-          <span>Recordar sesión</span>
-        </label>
-
-        <a class="auth-forgot" href="mailto:secretariapsicologia@cue.edu.co">¿Olvidaste tu contraseña?</a>
+        <div class="auth-row">
+          <label class="auth-remember">
+            <input type="checkbox" formControlName="remember" />
+            <span>Recordar sesión</span>
+          </label>
+          <a class="auth-forgot" href="mailto:secretariapsicologia@cue.edu.co">¿Olvidaste tu contraseña?</a>
+        </div>
 
         @if (error()) {
           <p class="auth-error" role="alert">{{ error() }}</p>
-        }
-        @if (ssoNotice()) {
-          <p class="auth-notice" role="status">{{ ssoNotice() }}</p>
         }
         @if (loading()) {
           <mat-progress-bar mode="indeterminate" aria-label="Iniciando sesión"></mat-progress-bar>
         }
 
-        <button type="submit" [disabled]="form.invalid || loading()">Ingresar</button>
+        <button type="submit" class="auth-submit" [disabled]="form.invalid || loading()">Ingresar</button>
       </form>
     </div>
 
     <div class="toggle-container">
       <div class="toggle">
         <div class="toggle-panel toggle-left">
+          <div class="toggle-brand">
+            <span class="toggle-brand__icon" aria-hidden="true">
+              <mat-icon>psychology</mat-icon>
+            </span>
+            <div>
+              <strong>{{ brand.shortName }}</strong>
+              <small>{{ brand.fullName }}</small>
+            </div>
+          </div>
+
+          <div class="toggle-sim-preview" [attr.data-role]="selectedRole()">
+            <div class="toggle-sim-preview__hud">
+              <span>{{ activeRole().previewCase }}</span>
+              <span>{{ activeRole().previewScene }}</span>
+            </div>
+            <div class="toggle-sim-preview__visual">
+              <img [src]="loginHeroImage" alt="Consultorio psicosocial SIEP: entorno de simulación formativa" />
+            </div>
+            <p class="toggle-sim-preview__caption">{{ activeRole().narrative }}</p>
+          </div>
+
+          <div class="toggle-pillars" aria-label="Pilares pedagógicos SIEP">
+            @for (pillar of pedagogyPillars; track pillar.key) {
+              <span class="toggle-pillar" [style.--pillar-color]="pillar.color" [title]="pillar.description">
+                <span class="toggle-pillar__badge" aria-hidden="true">{{ pillar.short }}</span>
+                <small>{{ pillar.title }}</small>
+              </span>
+            }
+          </div>
+
           <h1>¡Bienvenido de nuevo!</h1>
-          <p>Ingresa con tu cuenta institucional para continuar tu entrenamiento psicosocial en {{ brand.shortName }}.</p>
+          <p>Continúa tu entrenamiento psicosocial con casos simulados, bitácora reflexiva y retroalimentación formativa.</p>
           <button type="button" class="hidden" id="login" (click)="openSignIn()">Iniciar sesión</button>
         </div>
+
         <div class="toggle-panel toggle-right">
+          <div class="toggle-brand">
+            <span class="toggle-brand__icon" aria-hidden="true">
+              <mat-icon>psychology</mat-icon>
+            </span>
+            <div>
+              <strong>{{ brand.shortName }}</strong>
+              <small>{{ brand.institution }}</small>
+            </div>
+          </div>
+
+          <div class="toggle-sim-preview" [attr.data-role]="selectedRole()">
+            <div class="toggle-sim-preview__hud">
+              <span>{{ activeRole().previewCase }}</span>
+              <span>{{ activeRole().previewScene }}</span>
+            </div>
+            <div class="toggle-sim-preview__visual">
+              <img [src]="loginHeroImage" alt="Consultorio psicosocial SIEP: entorno de simulación formativa" />
+            </div>
+            <p class="toggle-sim-preview__caption">{{ activeRole().narrative }}</p>
+          </div>
+
+          <div class="toggle-pillars" aria-label="Pilares pedagógicos SIEP">
+            @for (pillar of pedagogyPillars; track pillar.key) {
+              <span class="toggle-pillar" [style.--pillar-color]="pillar.color" [title]="pillar.description">
+                <span class="toggle-pillar__badge" aria-hidden="true">{{ pillar.short }}</span>
+                <small>{{ pillar.title }}</small>
+              </span>
+            }
+          </div>
+
           <h1>¿Nuevo en {{ brand.shortName }}?</h1>
           <p>Las cuentas son asignadas por la facultad. Solicita acceso o consulta con tu docente.</p>
           <button type="button" class="hidden" id="register" (click)="openSignUp()">Solicitar acceso</button>

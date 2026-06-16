@@ -30,7 +30,7 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 401) {
         auth.clearSession();
         if (!router.url.startsWith('/login')) {
-          notifications.warning('Tu usuario está inactivo o la sesión ya no es válida. Contacta al administrador.');
+          notifications.warning('Tu sesión ya no es válida o tu usuario está inactivo. Contacta al administrador.');
           router.navigate(['/login']);
         }
         return throwError(() => error);
@@ -39,7 +39,7 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 403 && req.url.includes('/api/auth/me')) {
         auth.clearSession();
         if (!router.url.startsWith('/login')) {
-          notifications.warning('Tu usuario está inactivo o la sesión ya no es válida. Contacta al administrador.');
+          notifications.warning('Tu sesión ya no es válida o tu usuario está inactivo. Contacta al administrador.');
           router.navigate(['/login']);
         }
         return throwError(() => error);

@@ -216,6 +216,81 @@ def get_completion_report(attempt_id, attempt_token, actor):
     return dto.build_completion_report(attempt, events)
 
 
+def list_attempt_history(actor):
+    """Resumen de los intentos del propio estudiante (más recientes primero).
+
+    Las cuentas de decisiones se calculan en una sola consulta agregada para
+    evitar N+1, con la misma semántica que el reporte de finalización.
+    """
+    attempts = list(
+        SimulationAttempt.objects.filter(student_id=actor.id)
+        .select_related("case_version__simulation_case")
+        .order_by("-started_at")
+    )
+    if not attempts:
+        return []
+
+    attempt_ids = [a.id for a in attempts]
+    counts = {
+        aid: {"ADEQUATE": 0, "RISKY": 0, "INADEQUATE": 0, "PROHIBITED": 0}
+        for aid in attempt_ids
+    }
+    decision_events = (
+        AttemptEvent.objects.filter(
+            attempt_id__in=attempt_ids, decision_option__isnull=False
+        )
+        .values(
+            "attempt_id",
+            "decision_option__classification",
+            "decision_option__prohibited_conduct",
+        )
+    )
+    for ev in decision_events:
+        bucket = counts[ev["attempt_id"]]
+        classification = ev["decision_option__classification"]
+        if classification in bucket:
+            bucket[classification] += 1
+        if ev["decision_option__prohibited_conduct"]:
+            bucket["PROHIBITED"] += 1
+
+    return [
+        {
+            "attemptId": str(a.id),
+            "caseVersionId": a.case_version_id,
+            "caseTitle": a.case_version.simulation_case.title,
+            "status": a.status,
+            "accumulatedScore": a.accumulated_score,
+            "adequateDecisions": counts[a.id]["ADEQUATE"],
+            "riskyDecisions": counts[a.id]["RISKY"],
+            "inadequateDecisions": counts[a.id]["INADEQUATE"],
+            "prohibitedDecisions": counts[a.id]["PROHIBITED"],
+            "totalDurationSeconds": (
+                int((a.ended_at - a.started_at).total_seconds())
+                if a.started_at and a.ended_at else None
+            ),
+            "startedAt": a.started_at.isoformat() if a.started_at else None,
+            "endedAt": a.ended_at.isoformat() if a.ended_at else None,
+        }
+        for a in attempts
+    ]
+
+
+def get_student_report(attempt_id, actor):
+    """Reporte de finalización de un intento accedido por su dueño (o staff),
+    sin requerir el token del intento (se usa desde el historial del estudiante)."""
+    attempt = (
+        SimulationAttempt.objects.filter(pk=attempt_id)
+        .select_related("case_version__simulation_case", "current_node", "student")
+        .first()
+    )
+    if not attempt:
+        raise NotFound("Intento no encontrado")
+    if attempt.student_id != actor.id and actor.role not in ("ADMIN", "PROFESOR"):
+        raise PermissionDenied("No tiene acceso a este intento")
+    events = list(AttemptEvent.objects.filter(attempt_id=attempt.id).order_by("occurred_at", "id"))
+    return dto.build_completion_report(attempt, events)
+
+
 @transaction.atomic
 def choose_decision(attempt_id, attempt_token, decision_option_id, actor):
     attempt = _require_attempt(attempt_id, attempt_token, actor)
@@ -235,22 +310,31 @@ def choose_decision(attempt_id, attempt_token, decision_option_id, actor):
         raise ValidationError("La decisión no pertenece al caso del intento")
 
     effects = decision_effects.resolve(decision)
-    retry_required = decision.prohibited_conduct or decision.classification in {"RISKY", "INADEQUATE"}
-    if retry_required:
-        message = (
-            "La respuesta seleccionada puede ser riesgosa o inadecuada para este momento. "
-            "Puedes volver a responder esta escena."
-        )
-        event_type = (
-            "PROHIBITED_DECISION_RETRY_REQUIRED"
-            if decision.prohibited_conduct
-            else "DECISION_RETRY_REQUIRED"
-        )
-        # El intento queda trazado para revisión/rúbrica docente, pero no cambia
-        # métricas ni avanza el DAG hasta que el estudiante elija una ruta viable.
-        _save_event(attempt, event_type, decision.source_node, decision, 0, 0, message)
-        feedback = dto.feedback_dto(decision, effects, message)
-        return dto.attempt_state(attempt, attempt_token, feedback)
+    is_bad_answer = decision.prohibited_conduct or decision.classification in {"RISKY", "INADEQUATE"}
+    if is_bad_answer:
+        # Regla de 2 oportunidades por escena/cuestionario: la PRIMERA respuesta
+        # riesgosa/inadecuada concede una segunda (y última) oportunidad sin
+        # cambiar métricas ni avanzar el DAG. Si la SEGUNDA también es mala, ya
+        # no se reintenta: queda registrada y avanza (cae al bloque de commit).
+        prior_retries = AttemptEvent.objects.filter(
+            attempt_id=attempt.id,
+            node_id=attempt.current_node_id,
+            event_type__in=["DECISION_RETRY_REQUIRED", "PROHIBITED_DECISION_RETRY_REQUIRED"],
+        ).count()
+        if prior_retries == 0:
+            message = (
+                "La respuesta seleccionada puede ser riesgosa o inadecuada para este momento. "
+                "Tienes una última oportunidad para volver a responder esta escena."
+            )
+            event_type = (
+                "PROHIBITED_DECISION_RETRY_REQUIRED"
+                if decision.prohibited_conduct
+                else "DECISION_RETRY_REQUIRED"
+            )
+            # Trazado para revisión/rúbrica docente; sin cambios de métricas ni avance.
+            _save_event(attempt, event_type, decision.source_node, decision, 0, 0, message)
+            feedback = dto.feedback_dto(decision, effects, message, retry_required=True)
+            return dto.attempt_state(attempt, attempt_token, feedback)
 
     decision_effects.apply(attempt, effects)
     # Efecto mariposa del caso: flags clínicos + métricas acumulativas (se

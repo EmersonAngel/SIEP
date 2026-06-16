@@ -6,8 +6,8 @@ student alias), and rubric evaluation read/save.
 """
 import json
 
-from django.db import transaction
-from rest_framework.exceptions import NotFound
+from django.db import connection, transaction
+from rest_framework.exceptions import NotFound, PermissionDenied
 
 from apps.simulation.serializers import game_dtos as dto
 
@@ -41,7 +41,21 @@ def _read_map(raw):
         return {}
 
 
-def _require_attempt(attempt_id):
+def _student_ids_for_instructor(instructor):
+    if getattr(instructor, "role", None) == "ADMIN":
+        return None
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT ge.estudiante_id "
+            "FROM grupo_estudiante ge "
+            "JOIN grupos g ON g.id = ge.grupo_id "
+            "WHERE g.profesor_id = %s AND g.activo = TRUE",
+            [instructor.id],
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def _require_attempt(attempt_id, instructor=None):
     attempt = (
         SimulationAttempt.objects.filter(pk=attempt_id)
         .select_related("case_version__simulation_case", "current_node", "student")
@@ -49,14 +63,21 @@ def _require_attempt(attempt_id):
     )
     if not attempt:
         raise NotFound("Intento no encontrado")
+    if instructor is not None and getattr(instructor, "role", None) != "ADMIN":
+        student_ids = _student_ids_for_instructor(instructor)
+        if attempt.student_id not in student_ids:
+            raise PermissionDenied("No tienes permiso para revisar este intento")
     return attempt
 
 
-def recent_attempts():
-    attempts = (
-        SimulationAttempt.objects.select_related("case_version__simulation_case", "student")
-        .order_by("-started_at")[:20]
-    )
+def recent_attempts(instructor):
+    attempts = SimulationAttempt.objects.select_related("case_version__simulation_case", "student").order_by("-started_at")
+    student_ids = _student_ids_for_instructor(instructor)
+    if student_ids is not None:
+        if not student_ids:
+            return []
+        attempts = attempts.filter(student_id__in=student_ids)
+    attempts = attempts[:20]
     return [
         {
             "attemptId": str(a.id),
@@ -72,14 +93,19 @@ def recent_attempts():
 
 
 @transaction.atomic
-def trace(attempt_id):
-    attempt = _require_attempt(attempt_id)
+def trace(attempt_id, instructor=None):
+    attempt = _require_attempt(attempt_id, instructor)
     events = list(
         AttemptEvent.objects.filter(attempt_id=attempt_id)
         .select_related("node", "decision_option")
         .order_by("occurred_at", "id")
     )
     report = dto.build_completion_report(attempt, events)
+    total_duration = report["totalDurationSeconds"]
+    if total_duration is None and attempt.started_at and events:
+        last_at = events[-1].occurred_at
+        if last_at:
+            total_duration = int((last_at - attempt.started_at).total_seconds())
     return {
         "attemptId": str(attempt.id),
         "studentAlias": _anonymize(attempt),
@@ -95,6 +121,9 @@ def trace(attempt_id):
         "inadequateDecisions": report["inadequateDecisions"],
         "prohibitedDecisions": report["prohibitedDecisions"],
         "safeExitUsed": report["safeExitUsed"],
+        "totalDurationSeconds": total_duration,
+        "timeline": report["timeline"],
+        "visitedNodeTitles": report["visitedNodeTitles"],
         "events": [_to_trace_event(e) for e in events],
         "world": world_service.world_for_attempt(attempt),
         "reflections": [
@@ -121,8 +150,8 @@ def trace(attempt_id):
     }
 
 
-def rubric(attempt_id):
-    attempt = _require_attempt(attempt_id)
+def rubric(attempt_id, instructor=None):
+    attempt = _require_attempt(attempt_id, instructor)
     rubric_obj = (
         Rubric.objects.filter(case_version_id=attempt.case_version_id, active=True)
         .order_by("id")
@@ -135,7 +164,7 @@ def rubric(attempt_id):
 
 @transaction.atomic
 def save_rubric(attempt_id, request, instructor):
-    attempt = _require_attempt(attempt_id)
+    attempt = _require_attempt(attempt_id, instructor)
     rubric_obj = Rubric.objects.filter(pk=request.get("rubricId")).first()
     if not rubric_obj:
         raise NotFound("Rubrica no encontrada")

@@ -1,11 +1,27 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { SimulationService } from '../../core/api/simulation.service';
 import { AuthService } from '../../core/auth/auth.service';
-import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView, TraceEvent } from '../../core/models/simulation.model';
+import { AttemptTrace, AttemptTimelineEntry, RecentAttempt, ReflectionTrace, RubricCriterionView, RubricEvaluationView, RubricSummary, TraceEvent } from '../../core/models/simulation.model';
+
+type SummaryFeedbackKey = 'TOTAL' | 'ADEQUATE' | 'RISKY' | 'INADEQUATE' | 'REFLECTIONS' | 'EVALUATION' | 'TIME' | 'RECORRIDO';
+
+interface FeedbackPanelView {
+  key: SummaryFeedbackKey;
+  title: string;
+  intro: string;
+  decisions: TraceEvent[];
+  timeline: AttemptTimelineEntry[];
+  reflections: ReflectionTrace[];
+  evaluations: RubricSummary[];
+  emptyTitle: string;
+  emptyMessage: string;
+  missingNodes: string[];
+}
 
 @Component({
   selector: 'app-instructor-trace',
@@ -106,37 +122,193 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
             </section>
 
             <section class="review-summary-grid" aria-label="Resumen de revisión">
-              <article class="review-summary-card pixel-card">
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--action pixel-card"
+                (click)="openFeedback('TOTAL', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Total decisiones</span>
                 <strong>{{ totalDecisions(item) }}</strong>
-              </article>
-              <article class="review-summary-card review-summary-card--adequate pixel-card">
+                <span class="review-summary-card__cta">Ver retroalimentación <mat-icon aria-hidden="true">feedback</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--adequate review-summary-card--action pixel-card"
+                (click)="openFeedback('ADEQUATE', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Adecuadas</span>
                 <strong>{{ item.adequateDecisions }}</strong>
-              </article>
-              <article class="review-summary-card review-summary-card--risky pixel-card">
+                <span class="review-summary-card__cta">Ver retroalimentación <mat-icon aria-hidden="true">feedback</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--risky review-summary-card--action pixel-card"
+                (click)="openFeedback('RISKY', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Riesgosas</span>
                 <strong>{{ item.riskyDecisions }}</strong>
-              </article>
-              <article class="review-summary-card review-summary-card--inadequate pixel-card">
+                <span class="review-summary-card__cta">Ver retroalimentación <mat-icon aria-hidden="true">feedback</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--inadequate review-summary-card--action pixel-card"
+                (click)="openFeedback('INADEQUATE', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Inadecuadas</span>
                 <strong>{{ item.inadequateDecisions }}</strong>
-              </article>
-              <article class="review-summary-card pixel-card">
+                <span class="review-summary-card__cta">Ver retroalimentación <mat-icon aria-hidden="true">feedback</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--action pixel-card"
+                (click)="openFeedback('REFLECTIONS', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Reflexiones</span>
                 <strong>{{ item.reflections.length }}</strong>
-              </article>
-              <article class="review-summary-card pixel-card">
+                <span class="review-summary-card__cta">Ver bitácoras <mat-icon aria-hidden="true">menu_book</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--action pixel-card"
+                (click)="openFeedback('EVALUATION', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Evaluación</span>
                 <strong>{{ item.rubricEvaluations.length ? 'Aplicada' : 'Pendiente' }}</strong>
-              </article>
-              <article class="review-summary-card pixel-card">
+                <span class="review-summary-card__cta">Ver evaluación <mat-icon aria-hidden="true">grading</mat-icon></span>
+              </button>
+              <button
+                type="button"
+                class="review-summary-card review-summary-card--wide review-summary-card--action pixel-card"
+                (click)="openFeedback('TIME', item)"
+                aria-haspopup="dialog"
+              >
                 <span>Tiempo total</span>
                 <strong>{{ formatDuration(item.totalDurationSeconds) }}</strong>
-              </article>
+                <span class="review-summary-card__cta">Ver detalle <mat-icon aria-hidden="true">schedule</mat-icon></span>
+              </button>
             </section>
 
-            @if (item.phaseDurations.length) {
+            @if (feedbackPanel(); as panel) {
+              <div
+                class="feedback-modal"
+                role="dialog"
+                aria-modal="true"
+                [attr.aria-labelledby]="'feedback-modal-title-' + panel.key"
+                (keydown.escape)="closeFeedback()"
+              >
+                <button type="button" class="feedback-modal__backdrop" aria-label="Cerrar retroalimentación" (click)="closeFeedback()"></button>
+                <section class="feedback-modal__panel pixel-panel">
+                  <header class="feedback-modal__header">
+                    <div>
+                      <p class="psy-eyebrow">Retroalimentación docente</p>
+                      <h2 [id]="'feedback-modal-title-' + panel.key">{{ panel.title }}</h2>
+                      <p>{{ panel.intro }}</p>
+                    </div>
+                  </header>
+
+                  <div class="feedback-modal__body">
+                  @if (panel.decisions.length) {
+                    <div class="feedback-modal__list">
+                      @for (decision of panel.decisions; track $index) {
+                        <article class="feedback-decision-card pixel-card" [ngClass]="eventClass(decision)">
+                          <div class="feedback-decision-card__top">
+                            <span class="pixel-badge" [ngClass]="classificationClass(decision.classification)">
+                              {{ classificationLabel(decision.classification) }}
+                            </span>
+                            <small>{{ formatDate(decision.occurredAt) }}</small>
+                          </div>
+                          <h3>{{ clean(decision.decisionText, 'Decisión registrada') }}</h3>
+                          @if (decision.nodeTitle) {
+                            <p class="feedback-decision-card__node">Escenario: {{ decision.nodeTitle }}</p>
+                          }
+                          <p class="feedback-decision-card__hint">{{ decisionFeedback(decision) }}</p>
+                          @if (decision.scoreDelta || decision.stressDelta) {
+                            <small>
+                              Impacto · Puntaje {{ signed(decision.scoreDelta) }} · Estrés {{ signed(decision.stressDelta) }}
+                            </small>
+                          }
+                        </article>
+                      }
+                    </div>
+                  } @else if (panel.timeline.length) {
+                    <div class="feedback-modal__list">
+                      @for (entry of panel.timeline; track $index) {
+                        <article class="feedback-decision-card pixel-card" [ngClass]="timelineEntryClass(entry)">
+                          <div class="feedback-decision-card__top">
+                            <span class="pixel-badge" [ngClass]="classificationClass(entry.classification)">
+                              {{ timelineEntryLabel(entry) }}
+                            </span>
+                            <small>{{ entry.time }}</small>
+                          </div>
+                          <h3>{{ clean(entry.label, 'Evento registrado') }}</h3>
+                          <p class="feedback-decision-card__hint">{{ timelineFeedback(entry) }}</p>
+                        </article>
+                      }
+                    </div>
+                  } @else if (panel.reflections.length) {
+                    <div class="feedback-modal__list">
+                      @for (reflection of panel.reflections; track reflection.nodeId) {
+                        <article class="reflection-card pixel-card">
+                          <div class="reflection-card__top">
+                            <strong>{{ clean(reflection.nodeTitle, 'Escenario') }}</strong>
+                            @if (reflection.locked) {
+                              <span class="pixel-badge">Bloqueada</span>
+                            }
+                          </div>
+                          <p>{{ clean(reflection.text, 'Sin texto registrado.') }}</p>
+                        </article>
+                      }
+                    </div>
+                  } @else if (panel.evaluations.length) {
+                    <div class="feedback-modal__list">
+                      @for (evaluation of panel.evaluations; track evaluation.id) {
+                        <article class="feedback-decision-card pixel-card">
+                          <h3>{{ clean(evaluation.rubricName, 'Rúbrica') }}</h3>
+                          <p>Puntaje total: <strong>{{ evaluation.totalScore }}</strong></p>
+                          @if (evaluation.comment) {
+                            <p class="feedback-decision-card__hint">{{ evaluation.comment }}</p>
+                          }
+                          <small>Evaluada {{ formatDate(evaluation.evaluatedAt) }}</small>
+                        </article>
+                      }
+                    </div>
+                  } @else if (panel.key === 'TIME') {
+                    <article class="feedback-decision-card pixel-card">
+                      <h3>Duración del intento</h3>
+                      <p class="feedback-decision-card__hint">{{ panel.intro }}</p>
+                    </article>
+                  } @else {
+                    <section class="teacher-empty teacher-empty--compact">
+                      <h3>{{ panel.emptyTitle }}</h3>
+                      <p>{{ panel.emptyMessage }}</p>
+                      @if (panel.missingNodes.length) {
+                        <div class="reflection-missing">
+                          <strong>Escenarios visitados sin bitácora:</strong>
+                          <ul>
+                            @for (nodeTitle of panel.missingNodes; track nodeTitle) {
+                              <li>{{ nodeTitle }}</li>
+                            }
+                          </ul>
+                        </div>
+                      }
+                    </section>
+                  }
+                  </div>
+
+                  <footer class="feedback-modal__footer">
+                    <button type="button" class="pixel-button pixel-button--primary" (click)="closeFeedback()">Cerrar</button>
+                  </footer>
+                </section>
+              </div>
+            }
+
+            @if ((item.phaseDurations ?? []).length) {
               <section class="trace-timeline pixel-panel" aria-labelledby="phase-duration-title">
                 <div class="panel-heading panel-heading--row">
                   <div>
@@ -153,7 +325,7 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
                       </div>
                       <small>
                         Inicio {{ formatDate(phase.startedAt) }}
-                        @if (phase.endedAt) { Â· Fin {{ formatDate(phase.endedAt) }} }
+                        @if (phase.endedAt) { · Fin {{ formatDate(phase.endedAt) }} }
                       </small>
                     </div>
                   </article>
@@ -167,35 +339,34 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
                   <p class="psy-eyebrow">Recorrido</p>
                   <h2 id="trace-title">Línea de tiempo de eventos</h2>
                 </div>
-                <span class="pixel-badge">{{ item.events.length }} eventos</span>
+                <span class="pixel-badge">{{ timelineEntries(item).length }} eventos</span>
+                <button type="button" class="pixel-button pixel-button--mini" (click)="openFeedback('RECORRIDO', item)">
+                  Ver retroalimentación
+                </button>
               </div>
 
-              @if (!item.events.length) {
+              @if (!timelineEntries(item).length) {
                 <section class="teacher-empty teacher-empty--compact">
                   <h3>No hay eventos registrados para este intento.</h3>
                 </section>
               }
 
-              @for (event of item.events; track $index) {
-                <article class="trace-event-card pixel-card" [ngClass]="eventClass(event)">
+              @for (entry of timelineEntries(item); track $index) {
+                <article class="trace-event-card pixel-card" [ngClass]="timelineEntryClass(entry)">
                   <div class="trace-event-card__marker" aria-hidden="true">
-                    <mat-icon>{{ iconFor(event.type) }}</mat-icon>
+                    <mat-icon>{{ timelineIcon(entry) }}</mat-icon>
                   </div>
                   <div class="trace-event-card__body">
                     <div class="trace-event-card__top">
-                      <strong>{{ eventTitle(event) }}</strong>
-                      <span class="pixel-badge" [ngClass]="classificationClass(event.classification)">
-                        {{ classificationLabel(event.classification || event.type) }}
+                      <strong>{{ clean(entry.label, 'Evento registrado') }}</strong>
+                      <span class="pixel-badge" [ngClass]="classificationClass(entry.classification)">
+                        {{ timelineEntryLabel(entry) }}
                       </span>
                     </div>
-                    @if (event.nodeTitle) {
-                      <p class="trace-event-card__node">{{ event.nodeTitle }}</p>
-                    }
-                    <p>{{ eventText(event) }}</p>
                     <small>
-                      {{ formatDate(event.occurredAt) }}
-                      @if (event.scoreDelta || event.stressDelta) {
-                        · Puntaje {{ signed(event.scoreDelta) }} · Estrés {{ signed(event.stressDelta) }}
+                      {{ entry.time }}
+                      @if (entry.scoreDelta || entry.stressDelta) {
+                        · Puntaje {{ signed(entry.scoreDelta) }} · Estrés {{ signed(entry.stressDelta) }}
                       }
                     </small>
                   </div>
@@ -210,11 +381,28 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
                   <h2 id="reflection-title">Reflexiones del estudiante</h2>
                 </div>
                 <span class="pixel-badge">{{ item.reflections.length }} registradas</span>
+                <button type="button" class="pixel-button pixel-button--mini" (click)="openFeedback('REFLECTIONS', item)">
+                  Ver retroalimentación
+                </button>
               </div>
 
               @if (!item.reflections.length) {
                 <section class="teacher-empty teacher-empty--compact">
                   <h3>El estudiante aún no registró reflexiones en este intento.</h3>
+                  <p>
+                    La bitácora es opcional por escenario. Puedes evaluar con la trazabilidad de decisiones
+                    y la rúbrica del caso.
+                  </p>
+                  @if (nodesWithoutReflection(item).length) {
+                    <div class="reflection-missing">
+                      <strong>Escenarios visitados sin bitácora:</strong>
+                      <ul>
+                        @for (nodeTitle of nodesWithoutReflection(item); track nodeTitle) {
+                          <li>{{ nodeTitle }}</li>
+                        }
+                      </ul>
+                    </div>
+                  }
                 </section>
               }
 
@@ -319,6 +507,9 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
               } @else {
                 <section class="teacher-empty teacher-empty--compact">
                   <h3>No hay rúbrica disponible para este caso.</h3>
+                  @if (rubricMessage()) {
+                    <p class="rubric-message" [class.rubric-message--error]="rubricMessageIsError()">{{ rubricMessage() }}</p>
+                  }
                 </section>
               }
             </section>
@@ -566,29 +757,172 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
 
     .review-summary-grid {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
 
     .review-summary-card {
       display: grid;
+      align-content: start;
+      gap: 10px;
+      min-height: 128px;
+      padding: 20px 22px;
+      border-left: 10px solid #5d7fa4;
+    }
+
+    .review-summary-card--action {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+
+    .review-summary-card--action:hover,
+    .review-summary-card--action:focus-visible {
+      transform: translate(-2px, -2px);
+      box-shadow: 8px 8px 0 rgba(43, 77, 111, .2);
+      outline: 3px solid rgba(111, 76, 175, .22);
+      outline-offset: 2px;
+    }
+
+    .review-summary-card__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      color: #482a7d;
+      font-size: .78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .review-summary-card__cta mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .pixel-button--mini {
+      min-height: 36px;
+      padding: 0 12px;
+      font-size: .78rem;
+    }
+
+    .feedback-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 220;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    .feedback-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      border: none;
+      background: rgba(12, 18, 34, .58);
+      cursor: pointer;
+    }
+
+    .feedback-modal__panel {
+      position: relative;
+      z-index: 1;
+      width: min(760px, 100%);
+      max-height: min(86vh, 920px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 14px;
+      overflow: hidden;
+      background: #fbfdff;
+    }
+
+    .feedback-modal__body {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 4px;
+    }
+
+    .feedback-modal__header,
+    .feedback-modal__footer,
+    .feedback-decision-card__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .feedback-modal__header h2 {
+      margin: 0;
+      font-family: 'Poppins', system-ui, sans-serif;
+      color: #1d3350;
+    }
+
+    .feedback-modal__list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .feedback-decision-card {
+      display: grid;
       gap: 8px;
-      min-height: 92px;
-      padding: 12px;
+      padding: 14px;
       border-left: 8px solid #5d7fa4;
+    }
+
+    .feedback-decision-card h3 {
+      margin: 0;
+      color: #1d3350;
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+
+    .feedback-decision-card__node {
+      margin: 0;
+      color: #53687d;
+      font-weight: 700;
+      font-size: .86rem;
+    }
+
+    .feedback-decision-card__hint {
+      margin: 0;
+      color: #334155;
+      font-size: .88rem;
+      line-height: 1.5;
+      font-weight: 600;
+      background: #f8fcff;
+      border-left: 4px solid #6f4caf;
+      padding: 8px 10px;
+      border-radius: 4px;
+    }
+
+    .feedback-modal__footer {
+      justify-content: flex-end;
+      padding-top: 4px;
+      border-top: 1px solid #d7e4f0;
+    }
+
+    .review-summary-card--wide {
+      grid-column: 1 / -1;
+      min-height: 112px;
     }
 
     .review-summary-card span {
       color: #53687d;
-      font-size: .82rem;
+      font-size: .9rem;
       font-weight: 800;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
     .review-summary-card strong {
       color: #1d3350;
-      font-size: clamp(1.35rem, 2vw, 2rem);
-      line-height: 1;
+      font-size: clamp(1.85rem, 3.2vw, 2.5rem);
+      line-height: 1.05;
+      font-family: 'Poppins', system-ui, sans-serif;
     }
 
     .review-summary-card--adequate {
@@ -665,6 +999,27 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
     .reflection-card {
       padding: 14px;
       background: #f8fcff;
+    }
+
+    .reflection-missing {
+      margin-top: 10px;
+      width: 100%;
+      text-align: left;
+    }
+
+    .reflection-missing strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #1d3350;
+      font-size: .84rem;
+    }
+
+    .reflection-missing ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #53687d;
+      font-size: .84rem;
+      line-height: 1.5;
     }
 
     .rubric-panel {
@@ -829,7 +1184,7 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
 
     @media (max-width: 1180px) {
       .review-summary-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
@@ -896,7 +1251,7 @@ import { AttemptTrace, RecentAttempt, RubricCriterionView, RubricEvaluationView,
     }
   `]
 })
-export class InstructorTraceComponent implements OnInit {
+export class InstructorTraceComponent implements OnInit, OnDestroy {
   private readonly simulationService = inject(SimulationService);
   private readonly authService = inject(AuthService);
 
@@ -910,6 +1265,9 @@ export class InstructorTraceComponent implements OnInit {
   readonly savingRubric = signal(false);
   readonly rubricValidationErrors = signal<Record<number, string>>({});
   readonly selectedAttemptId = signal<string | null>(null);
+  readonly feedbackPanel = signal<FeedbackPanelView | null>(null);
+
+  private scrollLockY = 0;
 
   rubricScores: Record<number, number> = {};
   rubricComments: Record<number, string> = {};
@@ -919,6 +1277,10 @@ export class InstructorTraceComponent implements OnInit {
     this.loadAttempts();
   }
 
+  ngOnDestroy() {
+    this.unlockPageScroll();
+  }
+
   open(attempt: RecentAttempt) {
     this.loading.set(true);
     this.error.set('');
@@ -926,6 +1288,7 @@ export class InstructorTraceComponent implements OnInit {
     this.rubricMessageIsError.set(false);
     this.rubricValidationErrors.set({});
     this.selectedAttemptId.set(attempt.attemptId);
+    this.feedbackPanel.set(null);
 
     this.simulationService.attemptTrace(attempt.attemptId).subscribe({
       next: trace => {
@@ -1069,6 +1432,254 @@ export class InstructorTraceComponent implements OnInit {
     return item.adequateDecisions + item.riskyDecisions + item.inadequateDecisions + item.prohibitedDecisions;
   }
 
+  decisionsByClassification(item: AttemptTrace, classification: 'ADEQUATE' | 'RISKY' | 'INADEQUATE'): TraceEvent[] {
+    const target = classification.toUpperCase();
+    return item.events.filter(event => this.isDecisionEvent(event) && (event.classification ?? '').toUpperCase() === target);
+  }
+
+  openFeedback(key: SummaryFeedbackKey, item: AttemptTrace) {
+    this.feedbackPanel.set(this.buildFeedbackPanel(key, item));
+    this.lockPageScroll();
+  }
+
+  closeFeedback() {
+    this.feedbackPanel.set(null);
+    this.unlockPageScroll();
+  }
+
+  decisionFeedback(event: TraceEvent): string {
+    const type = (event.type ?? '').toUpperCase();
+    const classification = (event.classification ?? '').toUpperCase();
+    if (type === 'PROHIBITED_DECISION_SELECTED') {
+      return 'Conducta contraindicada: conviene revisar marco ético, límites profesionales y rutas de protección.';
+    }
+    if (classification === 'ADEQUATE') {
+      return 'Esta elección refuerza una ruta de atención ética y pertinente. Puedes validarla en la retroalimentación.';
+    }
+    if (classification === 'RISKY') {
+      return 'Revisar en sesión: puede elevar el riesgo psicosocial, el estrés del caso o dejar brechas en la ruta institucional.';
+    }
+    if (classification === 'INADEQUATE') {
+      return 'Oportunidad de retroalimentación directa: contrastar la alternativa más adecuada y los principios de no revictimización.';
+    }
+    return 'Revisar el contexto del escenario y la justificación clínica de la decisión.';
+  }
+
+  timelineFeedback(entry: AttemptTimelineEntry): string {
+    if (entry.prohibited) {
+      return 'Evento marcado como contraindicado en el recorrido del estudiante.';
+    }
+    if (entry.classification === 'ADEQUATE') {
+      return 'Paso adecuado dentro del recorrido clínico simulado.';
+    }
+    if (entry.classification === 'RISKY') {
+      return 'Momento del recorrido que conviene analizar con el estudiante en supervisión.';
+    }
+    if (entry.classification === 'INADEQUATE') {
+      return 'Punto crítico del recorrido para orientar mejora formativa.';
+    }
+    if ((entry.type ?? '').toUpperCase() === 'TOOL_USED') {
+      return 'Uso de recurso o herramienta durante la simulación.';
+    }
+    if ((entry.type ?? '').toUpperCase() === 'SAFE_EXIT_REQUESTED') {
+      return 'El estudiante activó salida segura; no implica penalización automática.';
+    }
+    return 'Evento relevante dentro del recorrido del intento.';
+  }
+
+  private allDecisionEvents(item: AttemptTrace): TraceEvent[] {
+    return item.events.filter(event => this.isDecisionEvent(event));
+  }
+
+  private buildFeedbackPanel(key: SummaryFeedbackKey, item: AttemptTrace): FeedbackPanelView {
+    const empty = {
+      decisions: [] as TraceEvent[],
+      timeline: [] as AttemptTimelineEntry[],
+      reflections: [] as ReflectionTrace[],
+      evaluations: [] as RubricSummary[],
+      missingNodes: [] as string[],
+    };
+
+    if (key === 'TOTAL') {
+      const decisions = this.allDecisionEvents(item);
+      return {
+        key,
+        title: 'Todas las decisiones del intento',
+        intro: 'Resumen completo de las elecciones registradas y su clasificación formativa.',
+        ...empty,
+        decisions,
+        emptyTitle: 'Sin decisiones registradas',
+        emptyMessage: 'Este intento aún no tiene decisiones clínicas guardadas.',
+      };
+    }
+
+    if (key === 'ADEQUATE' || key === 'RISKY' || key === 'INADEQUATE') {
+      const labels = {
+        ADEQUATE: {
+          title: 'Decisiones adecuadas',
+          intro: 'Elecciones alineadas con buenas prácticas. Refuerza estos aciertos en tu retroalimentación.',
+        },
+        RISKY: {
+          title: 'Decisiones riesgosas',
+          intro: 'Elecciones que requieren revisión formativa por posible impacto en riesgo o estrés.',
+        },
+        INADEQUATE: {
+          title: 'Decisiones inadecuadas',
+          intro: 'Elecciones que conviene contrastar con alternativas más pertinentes en sesión docente.',
+        },
+      }[key];
+      const decisions = this.decisionsByClassification(item, key);
+      return {
+        key,
+        title: labels.title,
+        intro: labels.intro,
+        ...empty,
+        decisions,
+        emptyTitle: 'Sin decisiones en esta categoría',
+        emptyMessage: 'El estudiante no registró decisiones clasificadas así en este intento.',
+      };
+    }
+
+    if (key === 'REFLECTIONS') {
+      return {
+        key,
+        title: 'Bitácoras y reflexiones',
+        intro: 'Textos reflexivos que el estudiante guardó durante el caso (descifrados para revisión docente).',
+        ...empty,
+        reflections: item.reflections,
+        missingNodes: this.nodesWithoutReflection(item),
+        emptyTitle: 'Sin reflexiones registradas',
+        emptyMessage: 'La bitácora es opcional por escenario. Puedes evaluar con la trazabilidad de decisiones y la rúbrica.',
+      };
+    }
+
+    if (key === 'EVALUATION') {
+      return {
+        key,
+        title: 'Evaluación docente',
+        intro: item.rubricEvaluations.length
+          ? 'Evaluaciones de rúbrica ya aplicadas a este intento.'
+          : 'Aún no hay evaluación guardada. Completa la rúbrica al final de esta pantalla.',
+        ...empty,
+        evaluations: item.rubricEvaluations,
+        emptyTitle: 'Evaluación pendiente',
+        emptyMessage: 'Usa la sección de rúbrica más abajo para registrar puntajes y retroalimentación formativa.',
+      };
+    }
+
+    if (key === 'TIME') {
+      return {
+        key,
+        title: 'Tiempo del intento',
+        intro: `Duración registrada: ${this.formatDuration(item.totalDurationSeconds)}. Inicio ${this.formatDate(item.startedAt)}${item.endedAt ? ` · Cierre ${this.formatDate(item.endedAt)}` : ' · Intento aún en curso'}.`,
+        ...empty,
+        emptyTitle: 'Sin duración calculada',
+        emptyMessage: 'No hay suficientes eventos para estimar el tiempo del intento.',
+      };
+    }
+
+    return {
+      key,
+      title: 'Recorrido del estudiante',
+      intro: 'Línea de tiempo de decisiones, herramientas y eventos clave durante la simulación.',
+      ...empty,
+      timeline: this.timelineEntries(item),
+      emptyTitle: 'Sin eventos en el recorrido',
+      emptyMessage: 'No hay eventos registrados para reconstruir la línea de tiempo.',
+    };
+  }
+
+  timelineEntries(item: AttemptTrace): AttemptTimelineEntry[] {
+    if (item.timeline?.length) {
+      return item.timeline;
+    }
+    return this.buildTimelineFallback(item);
+  }
+
+  nodesWithoutReflection(item: AttemptTrace): string[] {
+    const reflected = new Set(item.reflections.map(reflection => this.clean(reflection.nodeTitle, '')));
+    const visited = item.visitedNodeTitles?.length
+      ? item.visitedNodeTitles
+      : item.events
+          .filter(event => (event.type ?? '').toUpperCase() === 'NODE_ENTERED' && event.nodeTitle)
+          .map(event => this.clean(event.nodeTitle, ''))
+          .filter((title, index, titles) => title && titles.indexOf(title) === index);
+    return visited.filter(title => title && !reflected.has(title));
+  }
+
+  timelineEntryClass(entry: AttemptTimelineEntry): string {
+    if (entry.prohibited) return 'trace-event-card--inadequate';
+    const normalized = (entry.classification ?? '').toUpperCase();
+    if (normalized === 'ADEQUATE') return 'trace-event-card--adequate';
+    if (normalized === 'RISKY') return 'trace-event-card--risky';
+    if (normalized === 'INADEQUATE') return 'trace-event-card--inadequate';
+    return '';
+  }
+
+  timelineEntryLabel(entry: AttemptTimelineEntry): string {
+    if (entry.prohibited) return 'Contraindicada';
+    if (entry.classification) return this.classificationLabel(entry.classification);
+    return this.classificationLabel(entry.type);
+  }
+
+  timelineIcon(entry: AttemptTimelineEntry): string {
+    return this.iconFor(entry.type);
+  }
+
+  private isDecisionEvent(event: TraceEvent): boolean {
+    const type = (event.type ?? '').toUpperCase();
+    return type === 'DECISION_SELECTED' || type === 'PROHIBITED_DECISION_SELECTED';
+  }
+
+  private lockPageScroll() {
+    if (typeof document === 'undefined') return;
+    this.scrollLockY = window.scrollY;
+    document.documentElement.classList.add('siep-scroll-locked');
+    document.body.classList.add('siep-scroll-locked');
+    document.body.style.top = `-${this.scrollLockY}px`;
+  }
+
+  private unlockPageScroll() {
+    if (typeof document === 'undefined') return;
+    if (!document.body.classList.contains('siep-scroll-locked')) return;
+    document.documentElement.classList.remove('siep-scroll-locked');
+    document.body.classList.remove('siep-scroll-locked');
+    document.body.style.top = '';
+    window.scrollTo(0, this.scrollLockY);
+  }
+
+  private buildTimelineFallback(item: AttemptTrace): AttemptTimelineEntry[] {
+    const allowed = new Set([
+      'DECISION_SELECTED',
+      'PROHIBITED_DECISION_SELECTED',
+      'DECISION_RETRY_REQUIRED',
+      'PROHIBITED_DECISION_RETRY_REQUIRED',
+      'TOOL_USED',
+      'ROOM_ENTERED',
+      'SAFE_EXIT_REQUESTED',
+    ]);
+    const start = item.startedAt ? new Date(item.startedAt).getTime() : null;
+    return item.events
+      .filter(event => allowed.has((event.type ?? '').toUpperCase()))
+      .map(event => {
+        const occurred = event.occurredAt ? new Date(event.occurredAt).getTime() : null;
+        const atSeconds = start && occurred ? Math.max(0, Math.floor((occurred - start) / 1000)) : null;
+        const minutes = atSeconds === null ? 0 : Math.floor(atSeconds / 60);
+        const seconds = atSeconds === null ? 0 : atSeconds % 60;
+        const prohibited = (event.type ?? '').toUpperCase() === 'PROHIBITED_DECISION_SELECTED';
+        return {
+          atSeconds,
+          time: atSeconds === null ? '--:--' : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+          type: event.type,
+          classification: (event.classification as AttemptTimelineEntry['classification']) ?? null,
+          prohibited,
+          label: this.clean(event.decisionText || event.detail || event.nodeTitle, 'Evento registrado'),
+          scoreDelta: event.scoreDelta,
+          stressDelta: event.stressDelta,
+        };
+      });
+  }
+
   rubricTotal(rubric: RubricEvaluationView): string {
     const total = rubric.criteria.reduce((sum, criterion) => sum + Number(this.rubricScores[criterion.id] ?? 0), 0);
     const max = rubric.criteria.reduce((sum, criterion) => sum + criterion.maxScore, 0);
@@ -1145,9 +1756,15 @@ export class InstructorTraceComponent implements OnInit {
         this.seedRubricForm(rubric);
         this.loading.set(false);
       },
-      error: () => {
+      error: (error: unknown) => {
         this.rubric.set(null);
-        this.error.set('No hay rúbrica disponible para este caso o no tienes permisos para evaluarla.');
+        if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.rubricMessage.set('Este caso aún no tiene rúbrica configurada. La trazabilidad sigue disponible abajo.');
+          this.rubricMessageIsError.set(false);
+        } else {
+          this.rubricMessage.set('No fue posible cargar la rúbrica de evaluación.');
+          this.rubricMessageIsError.set(true);
+        }
         this.loading.set(false);
       }
     });

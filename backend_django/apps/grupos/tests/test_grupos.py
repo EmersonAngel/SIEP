@@ -165,6 +165,29 @@ def test_import_students_from_xlsx_creates_and_assigns(profesor, estudiante):
     assert {"ana.rojas@x.com", "luis.perez@x.com", estudiante.email} <= emails
 
 
+def test_import_students_from_institutional_xlsx_template(profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "INST1"}, format="json").data["data"]
+    upload = _xlsx_upload([
+        ["N°", "Nombres", "Apellidos", "Correo institucional", "Contraseña temporal"],
+        ["1", "Sofía", "García Pérez", "sofia.garcia01@institucion.edu.co", "DaTe9590!"],
+        ["2", "Mateo", "Martínez Rojas", "mateo.martinez02@institucion.edu.co", "LuTe1346*"],
+    ])
+
+    resp = cl(profesor).post(
+        f"/api/grupos/{grupo['id']}/estudiantes/import",
+        {"file": upload},
+        format="multipart",
+    )
+
+    assert resp.status_code == 200
+    data = resp.data["data"]
+    assert data["created"] == 2
+    assert data["assigned"] == 2
+    assert data["grupo"]["totalEstudiantes"] == 2
+    assert User.objects.get(email="sofia.garcia01@institucion.edu.co").nombre == "Sofía"
+    assert User.objects.get(email="mateo.martinez02@institucion.edu.co").check_password("LuTe1346*")
+
+
 def test_list_students_in_group(profesor, estudiante):
     grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "LIST1"}, format="json").data["data"]
     cl(profesor).post(f"/api/grupos/{grupo['id']}/estudiantes", {"email": estudiante.email}, format="json")

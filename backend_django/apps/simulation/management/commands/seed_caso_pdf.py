@@ -45,6 +45,9 @@ from apps.simulation.models import (
 )
 
 CASE_CODE = "SIM-VBG-001"
+#: Casos legacy del mismo dominio que deben retirarse del catálogo al sembrar
+#: el canónico (evita que aparezcan casos de feminicidio duplicados).
+LEGACY_DUPLICATE_CASE_CODES = ("SOC-FEM-001",)
 CASE_TITLE = "Violencia Familiar y Tentativa de Feminicidio"
 CASE_DESCRIPTION = (
     "Caso formativo basado en el documento canónico de Psicología Social: "
@@ -75,6 +78,44 @@ TIME_JUMP_TEXT = (
     "Quince días después, tras el alta médica, inicia la ruta de "
     "restablecimiento de derechos."
 )
+
+DEFAULT_RUBRIC = {
+    "name": "Rúbrica formativa — Violencia de género y rutas de protección",
+    "description": (
+        "Evaluación por competencias psicosociales del caso SIM-VBG-001: "
+        "contención, marco normativo, intervención ética y reflexión profesional."
+    ),
+    "criteria": [
+        {
+            "competency": "CONTENCION",
+            "title": "Contención emocional y manejo de crisis",
+            "description": "Identifica necesidades inmediatas y estabiliza a la víctima y su red de apoyo.",
+            "max_score": 5,
+            "display_order": 1,
+        },
+        {
+            "competency": "MARCO_NORMATIVO",
+            "title": "Marco normativo y rutas de atención",
+            "description": "Aplica referentes legales y activa rutas institucionales adecuadas.",
+            "max_score": 5,
+            "display_order": 2,
+        },
+        {
+            "competency": "INTERVENCION_ETICA",
+            "title": "Intervención técnica y ética",
+            "description": "Toma decisiones clínicas que minimizan revictimización y riesgo.",
+            "max_score": 5,
+            "display_order": 3,
+        },
+        {
+            "competency": "REFLEXION",
+            "title": "Reflexión profesional",
+            "description": "Registra aprendizajes y justifica el criterio de intervención.",
+            "max_score": 5,
+            "display_order": 4,
+        },
+    ],
+}
 
 LOCKED_ESCUCHA = (
     "Primero identifica la necesidad de contención: habla con la familia en crisis."
@@ -1186,6 +1227,24 @@ class Command(BaseCommand):
                         display_order=criterion.display_order,
                     )
                 self.stdout.write(f"Rúbrica clonada desde la versión {source_rubric.case_version_id}")
+            else:
+                rubric = Rubric.objects.create(
+                    case_version=version,
+                    name=DEFAULT_RUBRIC["name"],
+                    description=DEFAULT_RUBRIC["description"],
+                    active=True,
+                    created_by=case.created_by,
+                )
+                for criterion in DEFAULT_RUBRIC["criteria"]:
+                    RubricCriterion.objects.create(
+                        rubric=rubric,
+                        competency=criterion["competency"],
+                        title=criterion["title"],
+                        description=criterion["description"],
+                        max_score=criterion["max_score"],
+                        display_order=criterion["display_order"],
+                    )
+                self.stdout.write("Rúbrica canónica creada para la versión publicada.")
 
         # ── Archivar otras versiones publicadas (catálogo = solo esta) ───────
         archived = (
@@ -1194,8 +1253,22 @@ class Command(BaseCommand):
             .update(status="ARCHIVED")
         )
 
+        # ── Retirar casos legacy duplicados del mismo dominio ────────────────
+        # SOC-FEM-001 es el caso de feminicidio previo (mismo PDF, código viejo)
+        # que quedaba publicado junto al canónico SIM-VBG-001. Se desactiva y se
+        # archivan sus versiones para que el catálogo muestre un único caso.
+        legacy_cases = SimulationCase.objects.filter(
+            code__in=LEGACY_DUPLICATE_CASE_CODES
+        ).exclude(pk=case.id)
+        legacy_versions_archived = CaseVersion.objects.filter(
+            simulation_case__in=legacy_cases, status="PUBLISHED"
+        ).update(status="ARCHIVED")
+        legacy_deactivated = legacy_cases.update(active=False)
+
         self.stdout.write(self.style.SUCCESS(
             f"Caso PDF sembrado: versión {version.semantic_version} (id {version.id}) — "
             f"{len(nodes)} nodos, {len(option_by_key)} opciones, {len(MAPS)} mapas, "
-            f"{n_objects} objetos ({n_doors} puertas). Versiones archivadas: {archived}."
+            f"{n_objects} objetos ({n_doors} puertas). Versiones archivadas: {archived}. "
+            f"Casos legacy retirados: {legacy_deactivated} "
+            f"(versiones archivadas: {legacy_versions_archived})."
         ))

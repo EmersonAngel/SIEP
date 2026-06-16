@@ -1,7 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from rest_framework.test import APIClient
 
+from apps.grupos.models import Grupo
 from apps.progression.models import StudentCaseCompletion
 from apps.simulation.models import CaseVersion
 
@@ -26,7 +28,24 @@ def _cl(user):
     return c
 
 
+def _assign_case_to_student(estudiante, case_version_id):
+    profesor = User.objects.create_user(
+        email="prof_prog@x.com", password="x", nombre="Pro", apellido="Prog", role="PROFESOR"
+    )
+    grupo = Grupo.objects.create(nombre="G-prog", codigo="PROG", profesor=profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, estudiante.id],
+        )
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
+
+
 def test_completing_case_records_completion(estudiante, case_version_id):
+    _assign_case_to_student(estudiante, case_version_id)
     c = _cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json").data["data"]
     token, attempt_id = start["attemptToken"], start["attemptId"]
@@ -49,6 +68,7 @@ def test_completing_case_records_completion(estudiante, case_version_id):
 
 
 def test_safe_exit_does_not_record_completion(estudiante, case_version_id):
+    _assign_case_to_student(estudiante, case_version_id)
     c = _cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json").data["data"]
     c.post(

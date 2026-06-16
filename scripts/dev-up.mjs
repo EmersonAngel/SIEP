@@ -121,6 +121,28 @@ function ensureFrontendDeps() {
   run('npm', ['install'], { cwd: FRONTEND });
 }
 
+function simulationSchemaReady() {
+  const result = spawnSync(
+    venvPython(),
+    [
+      'manage.py',
+      'shell',
+      '-c',
+      "from django.db import connection; c=connection.cursor(); c.execute(\"SELECT to_regclass('public.simulation_cases')\"); raise SystemExit(0 if c.fetchone()[0] else 1)",
+    ],
+    { cwd: BACKEND, stdio: 'pipe', shell: isWin },
+  );
+  return result.status === 0;
+}
+
+function ensureDevDatabase() {
+  if (simulationSchemaReady()) {
+    return;
+  }
+  console.log('[siep] Inicializando esquema del simulador y caso demo...');
+  run(venvPython(), ['manage.py', 'bootstrap_dev_db'], { cwd: BACKEND });
+}
+
 async function startDb() {
   const existing = spawnSync(
     'docker',
@@ -184,6 +206,7 @@ async function main() {
   ensureLocalSettings();
   await startDb();
   ensureVenv();
+  ensureDevDatabase();
   ensureFrontendDeps();
 
   console.log('[siep] Iniciando backend Django (:8091) y frontend Angular (:4200)...');

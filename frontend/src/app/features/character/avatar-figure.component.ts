@@ -1,11 +1,9 @@
 import { Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AvatarConfig } from './avatar.model';
-import { hairVariantId } from './avatar-config.util';
+import { bodyAssetName, hairVariantId } from './avatar-config.util';
 
 export type AvatarPreviewPose = 'front' | 'side';
-
-/** Tipo de capa del avatar modular (gobierna el orden de composición). */
 export type AvatarLayerKind = 'body' | 'hairBack' | 'face' | 'hairFront';
 
 export interface AvatarSpriteLayer {
@@ -38,27 +36,27 @@ export function avatarFramePosition(pose: AvatarPreviewPose): string {
   return pose === 'side' ? '0% 50%' : '0% 0%';
 }
 
-export function resolveAvatarSpriteLayers(config: AvatarConfig, pose: AvatarPreviewPose = 'front'): AvatarSpriteLayer[] {
+export function resolveAvatarSpriteLayers(config: AvatarConfig, _pose: AvatarPreviewPose = 'front'): AvatarSpriteLayer[] {
   const face = faceId(config);
   const variant = hairVariantId(config);
   const layers: AvatarSpriteLayer[] = [];
 
-  // Composición fase C: pelo atrás → cuerpo → cara → pelo frente. La masa
-  // trasera del pelo es opaca y va DETRÁS del cuerpo (en la vista de espaldas
-  // el runtime Phaser la sube por fila; el editor solo muestra frente/lado).
-  // Solo variantes con arte real (hairVariantId); 'none' omite ambas capas.
-  const variantKey = variant.replace(/_/g, '-');
   if (variant !== 'none') {
+    const variantKey = variant.replace(/_/g, '-');
     layers.push(layer(`hair-back-${variantKey}`, 'hairBack', `${MODULAR_ASSET_BASE}/hair/hair_${variant}_back.png`, 5));
   }
 
-  layers.push(layer('body', 'body', `${MODULAR_ASSET_BASE}/body/body_orientadora_purple.png`, 10));
+  layers.push(layer(
+    `body-${config.gender}-${config.clothingColor}`,
+    'body',
+    `${MODULAR_ASSET_BASE}/body/${bodyAssetName(config)}`,
+    10,
+  ));
 
-  if (pose === 'front') {
-    layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, 30));
-  }
+  layers.push(layer(`face-${face}`, 'face', `${MODULAR_ASSET_BASE}/face/face_${face}.png`, 30));
 
   if (variant !== 'none') {
+    const variantKey = variant.replace(/_/g, '-');
     layers.push(layer(`hair-front-${variantKey}`, 'hairFront', `${MODULAR_ASSET_BASE}/hair/hair_${variant}_front.png`, 40));
   }
 
@@ -71,7 +69,7 @@ export function resolveAvatarSpriteLayers(config: AvatarConfig, pose: AvatarPrev
   imports: [CommonModule],
   template: `
     <div class="avatar-pixel" [class.avatar-pixel--portrait]="portrait()" role="img"
-      [attr.aria-label]="'Avatar pixel art del estudiante'">
+      [attr.aria-label]="'Avatar pixel art'">
       <span class="avatar-shadow" aria-hidden="true"></span>
       @for (layer of layers(); track layer.key) {
         <span class="avatar-layer" aria-hidden="true"

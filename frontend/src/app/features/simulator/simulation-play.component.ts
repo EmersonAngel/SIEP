@@ -37,6 +37,17 @@ import { getSceneObjective } from './scene-objectives.config';
 import { AttemptOutcomeComponent } from './attempt-outcome.component';
 import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util';
 
+const CASE_INTRO_TITLE = 'Contexto inicial del caso';
+const CASE_INTRO_AUDIO = 'PsicoLament';
+const CASE_INTRO_PARAGRAPHS = [
+  'Son las 11 de la noche en un barrio con altas condiciones de vulnerabilidad: pobreza, violencias urbanas, robos, expendio de drogas, presencia de grupos armados ilegales y riñas callejeras entre vecinos.',
+  'Un hombre de aproximadamente 28 años entra a su domicilio, donde reside con su pareja actual, una mujer de 22 años. Ella tiene una hija de 3 años.',
+  'En horas de la tarde, el hombre había tenido un altercado verbal con su pareja. Hubo groserías, maltrato psicológico y chantaje emocional: le dijo que sin él no era nadie, que era una mujer mantenida y que estaba seguro de que ella le era infiel.',
+  'Esa noche, cuando él entra a la residencia, la mujer le reclama por llegar tarde y haberse perdido toda la tarde.',
+  'El hombre, sin mediar palabra, saca una navaja y hiere a la niña de 3 años, causándole la muerte de manera inmediata. Luego hiere a la mujer con 28 heridas de arma cortopunzante, dejándola gravemente herida.',
+  'Tu intervención inicia en urgencias. Lee el contexto con cuidado: cada conversación, herramienta y decisión puede cambiar el curso de la atención.'
+];
+
 @Component({
   selector: 'app-simulation-play',
   standalone: true,
@@ -104,6 +115,31 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
       }
 
       @if (attempt(); as game) {
+        @if (showCaseIntro()) {
+          <section class="case-intro-overlay" role="dialog" aria-modal="true" aria-labelledby="case-intro-title">
+            <article class="case-intro-card">
+              <header class="case-intro-card__header">
+                <p class="psy-eyebrow">Primera escena</p>
+                <h2 id="case-intro-title">{{ caseIntroTitle }}</h2>
+                <span>{{ caseIntroAudio }} está sonando</span>
+              </header>
+
+              <div class="case-intro-card__body" tabindex="0" aria-label="Contexto narrativo del caso">
+                @for (paragraph of caseIntroParagraphs; track paragraph) {
+                  <p>{{ paragraph }}</p>
+                }
+              </div>
+
+              <footer class="case-intro-card__actions">
+                <span>Lee el contexto completo antes de iniciar la intervención.</span>
+                <button class="psy-button psy-button--primary" type="button" (click)="continueFromCaseIntro()">
+                  Continuar
+                </button>
+              </footer>
+            </article>
+          </section>
+        }
+
         <header class="top-bar">
           <app-simulation-hud
             [attempt]="game"
@@ -496,6 +532,92 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
       color: rgba(201,184,255,.6);
     }
 
+    .case-intro-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 380;
+      display: grid;
+      place-items: center;
+      padding: clamp(14px, 4vw, 32px);
+      background:
+        radial-gradient(circle at 50% 20%, rgba(124,77,255,.16), transparent 40%),
+        rgba(5,8,14,.9);
+      backdrop-filter: blur(8px);
+    }
+    .case-intro-card {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      width: min(760px, 100%);
+      max-height: min(86vh, 720px);
+      border: 1px solid rgba(182,156,255,.34);
+      border-radius: 18px;
+      overflow: hidden;
+      color: var(--sim-ink);
+      background: linear-gradient(180deg, rgba(18,24,42,.96), rgba(8,12,18,.98));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.04),
+        0 28px 80px -36px rgba(124,77,255,.75);
+    }
+    .case-intro-card__header {
+      display: grid;
+      gap: 8px;
+      padding: clamp(18px, 4vw, 28px) clamp(18px, 4vw, 32px) 16px;
+      border-bottom: 1px solid rgba(182,156,255,.18);
+      background: rgba(124,77,255,.08);
+    }
+    .case-intro-card__header h2 {
+      margin: 0;
+      font-size: clamp(1.25rem, 3.6vw, 2rem);
+      line-height: 1.15;
+      color: #fff;
+    }
+    .case-intro-card__header span {
+      width: fit-content;
+      padding: 5px 10px;
+      border: 1px solid rgba(108,192,199,.32);
+      border-radius: 999px;
+      color: #bdeef2;
+      background: rgba(108,192,199,.1);
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .case-intro-card__body {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 20px clamp(18px, 4vw, 34px);
+      scrollbar-color: rgba(182,156,255,.45) rgba(255,255,255,.06);
+    }
+    .case-intro-card__body:focus-visible {
+      outline: 2px solid rgba(108,192,199,.75);
+      outline-offset: -4px;
+    }
+    .case-intro-card__body p {
+      margin: 0 0 14px;
+      color: rgba(244,247,251,.84);
+      font-size: clamp(.92rem, 2vw, 1rem);
+      line-height: 1.7;
+    }
+    .case-intro-card__body p:last-child { margin-bottom: 0; color: #f3dfb5; }
+    .case-intro-card__actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px clamp(18px, 4vw, 32px);
+      border-top: 1px solid rgba(182,156,255,.18);
+      background: rgba(5,8,14,.62);
+    }
+    .case-intro-card__actions span {
+      color: rgba(244,247,251,.58);
+      font-size: .78rem;
+      line-height: 1.4;
+    }
+    .case-intro-card__actions .psy-button {
+      flex-shrink: 0;
+      min-width: 140px;
+    }
+
     /* ── Overlays ────────────────────────────────────────────────────────── */
     .dialogue-cinematic { position: absolute; bottom: 0; left: 0; right: 0; z-index: 60; }
     .overlay-backdrop {
@@ -620,6 +742,13 @@ import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util
       .context-bar { justify-content: center; flex-basis: 100%; order: 3; }
       .context-bar__hint { display: none; }
       .safe-exit__copy strong { font-size: .66rem; }
+      .case-intro-overlay { padding: 10px; }
+      .case-intro-card { max-height: 90vh; border-radius: 14px; }
+      .case-intro-card__actions {
+        display: grid;
+        justify-items: stretch;
+      }
+      .case-intro-card__actions .psy-button { width: 100%; }
     }
     @keyframes sheet-up {
       from { transform: translateY(40px); opacity: 0; }
@@ -666,6 +795,10 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   readonly roomBanner   = signal('');
   /** Salto temporal / texto de transición autorado (map.ambient.transitionText). */
   readonly transitionNote = signal('');
+  readonly showCaseIntro = signal(false);
+  readonly caseIntroTitle = CASE_INTRO_TITLE;
+  readonly caseIntroAudio = CASE_INTRO_AUDIO;
+  readonly caseIntroParagraphs = CASE_INTRO_PARAGRAPHS;
   readonly musicMuted = signal(false);
   readonly sfxMuted = signal(false);
   readonly reduceMotion = signal(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
@@ -695,7 +828,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
 
   /** El mundo se congela con diálogo, journal u outcome abiertos (Fase 5/13). */
   readonly worldMotionPaused = computed(() =>
-    this.dialogue() !== null || this.journalOpen() || (this.attempt()?.status ?? 'IN_PROGRESS') !== 'IN_PROGRESS');
+    this.showCaseIntro() || this.dialogue() !== null || this.journalOpen() || (this.attempt()?.status ?? 'IN_PROGRESS') !== 'IN_PROGRESS');
 
   readonly selectedToolCode = computed(() => {
     const sel = this.selectedInteraction();
@@ -712,6 +845,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   private positionSaveHandle: number | null = null;
 
   ngOnDestroy(): void {
+    this.audioDirector.stopIntroLament();
     this.audioDirector.dispose();
   }
 
@@ -785,6 +919,14 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     if (event.defaultPrevented) return;
     const tag = (event.target as HTMLElement | null)?.tagName;
     const editable = (event.target as HTMLElement | null)?.isContentEditable;
+
+    if (this.showCaseIntro()) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.continueFromCaseIntro();
+      }
+      return;
+    }
 
     if (event.key === 'Escape') {
       if (this.journalOpen()) { event.preventDefault(); this.journalOpen.set(false); return; }
@@ -1420,6 +1562,30 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     if (previousMapKey && previousMapKey !== world.map.key) {
       this.announceRoomChange(world);
     }
+    this.maybeShowInitialCaseIntro(world);
+  }
+
+  private maybeShowInitialCaseIntro(world: SimulationWorldState): void {
+    const attempt = this.attempt();
+    if (!attempt || attempt.status !== 'IN_PROGRESS') return;
+    if (attempt.currentNode.key !== 'hospital-urgencias' || world.map.key !== 'hospital-urgencias') return;
+    const storageKey = this.caseIntroStorageKey(attempt);
+    if (sessionStorage.getItem(storageKey) === 'read') return;
+    this.showCaseIntro.set(true);
+    this.audioDirector.playIntroLament();
+  }
+
+  continueFromCaseIntro(): void {
+    const attempt = this.attempt();
+    if (attempt) sessionStorage.setItem(this.caseIntroStorageKey(attempt), 'read');
+    this.showCaseIntro.set(false);
+    this.audioDirector.stopIntroLament();
+    this.audioDirector.setStressLevel(attempt?.stressIndex ?? 0);
+    this.announce('Introducción completada. Inicia la intervención en urgencias.');
+  }
+
+  private caseIntroStorageKey(attempt: SimulationAttemptState): string {
+    return `siep_case_intro_${attempt.caseVersionId}_${attempt.attemptId}`;
   }
 
   /** Al cambiar de sala (puerta o decisión): nombre de la sala 1-2 s y, si el
@@ -1448,7 +1614,12 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     }));
   }
 
-  private feedbackRequiresRetry(feedback: Pick<SimulationFeedback, 'classification' | 'prohibitedConduct'>): boolean {
+  private feedbackRequiresRetry(feedback: Pick<SimulationFeedback, 'classification' | 'prohibitedConduct' | 'retryRequired'>): boolean {
+    // El backend es la autoridad: solo concede reintento en la 1ª respuesta mala
+    // (regla de 2 oportunidades). La 2ª respuesta riesgosa/inadecuada queda
+    // registrada y llega con retryRequired=false (aunque la clasificación sea mala).
+    if (typeof feedback.retryRequired === 'boolean') return feedback.retryRequired;
+    // Fallback para respuestas legacy sin el flag.
     return feedback.prohibitedConduct || feedback.classification === 'INADEQUATE' || feedback.classification === 'RISKY';
   }
 

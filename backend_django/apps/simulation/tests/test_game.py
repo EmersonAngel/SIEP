@@ -243,6 +243,39 @@ def test_risky_decision_requires_retry_without_advancing(estudiante, case_versio
     assert advanced.data["data"]["currentNode"]["key"] != node_key
 
 
+def test_second_bad_answer_is_registered_and_advances(estudiante, case_version_id):
+    """Regla de 2 oportunidades: la 1ª respuesta mala reintenta; la 2ª se registra
+    y avanza (queda el registro), aunque siga siendo riesgosa/inadecuada."""
+    assign_case_to_student(estudiante, case_version_id, "SIM-2STRIKE")
+    c = cl(estudiante)
+    start = c.post("/api/simulation/attempts",
+                   {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    attempt_id, token = start["attemptId"], start["attemptToken"]
+    node_id, node_key = start["currentNode"]["id"], start["currentNode"]["key"]
+
+    bad = DecisionOption.objects.filter(
+        source_node_id=node_id, classification__in=["INADEQUATE", "RISKY"]
+    ).first()
+    assert bad is not None
+
+    # 1ª respuesta mala -> reintento, no avanza, retryRequired True
+    r1 = c.post(f"/api/simulation/attempts/{attempt_id}/decisions",
+                {"attemptToken": token, "decisionOptionId": bad.id}, format="json").data["data"]
+    assert r1["currentNode"]["key"] == node_key
+    assert r1["feedback"]["retryRequired"] is True
+
+    # 2ª respuesta mala -> se registra y avanza, retryRequired False
+    r2 = c.post(f"/api/simulation/attempts/{attempt_id}/decisions",
+                {"attemptToken": token, "decisionOptionId": bad.id}, format="json").data["data"]
+    assert r2["currentNode"]["key"] != node_key
+    assert r2["feedback"]["retryRequired"] is False
+    assert AttemptEvent.objects.filter(
+        attempt_id=attempt_id,
+        event_type__in=["DECISION_SELECTED", "PROHIBITED_DECISION_SELECTED"],
+        decision_option_id=bad.id,
+    ).exists()
+
+
 def test_wrong_token_404(estudiante, case_version_id):
     assign_case_to_student(estudiante, case_version_id, "SIM-WRONG")
     c = cl(estudiante)
@@ -295,3 +328,53 @@ def test_completion_report_includes_timeline(estudiante, case_version_id):
     assert isinstance(entry["scoreDelta"], int)
     assert isinstance(entry["stressDelta"], int)
     assert report["totalDurationSeconds"] is None or report["totalDurationSeconds"] >= 0
+
+
+def test_attempt_history_lists_own_attempts(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-HIST")
+    c = cl(estudiante)
+    attempt = c.post("/api/simulation/attempts",
+                     {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    attempt_id, token = attempt["attemptId"], attempt["attemptToken"]
+    option_id = next(
+        o for o in attempt["currentNode"]["options"] if o["classification"] == "ADEQUATE"
+    )["id"]
+    c.post(f"/api/simulation/attempts/{attempt_id}/decisions",
+           {"attemptToken": token, "decisionOptionId": option_id}, format="json")
+
+    resp = c.get("/api/simulation/attempts/history")
+    assert resp.status_code == 200
+    history = resp.data["data"]
+    mine = next((h for h in history if h["attemptId"] == attempt_id), None)
+    assert mine is not None
+    assert mine["caseVersionId"] == case_version_id
+    assert mine["adequateDecisions"] >= 1
+    assert "startedAt" in mine
+
+
+def test_student_report_returns_completion_report(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-SREPORT")
+    c = cl(estudiante)
+    attempt = c.post("/api/simulation/attempts",
+                     {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    attempt_id, token = attempt["attemptId"], attempt["attemptToken"]
+    c.post(f"/api/simulation/attempts/{attempt_id}/safe-exit",
+           {"attemptToken": token, "reason": "test"}, format="json")
+
+    resp = c.get(f"/api/simulation/attempts/{attempt_id}/student-report")
+    assert resp.status_code == 200
+    report = resp.data["data"]
+    assert report["attemptId"] == attempt_id
+    assert "timeline" in report and "metrics" in report
+
+
+def test_student_report_denies_other_students(estudiante, case_version_id):
+    assign_case_to_student(estudiante, case_version_id, "SIM-SREPORT2")
+    owner_client = cl(estudiante)
+    attempt = owner_client.post("/api/simulation/attempts",
+                                {"caseVersionId": case_version_id, "forceNew": True}, format="json").data["data"]
+    other = User.objects.create_user(
+        email="otro_est@x.com", password="x", nombre="Otro", apellido="Est", role="ESTUDIANTE"
+    )
+    resp = cl(other).get(f"/api/simulation/attempts/{attempt['attemptId']}/student-report")
+    assert resp.status_code == 403

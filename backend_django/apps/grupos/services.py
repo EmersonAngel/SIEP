@@ -28,6 +28,7 @@ IMPORT_HEADER_ALIASES = {
     "correo": "email",
     "correo electronico": "email",
     "correo electrónico": "email",
+    "correo institucional": "email",
     "mail": "email",
     "nombre": "nombre",
     "nombres": "nombre",
@@ -38,7 +39,15 @@ IMPORT_HEADER_ALIASES = {
     "password": "password",
     "contraseña": "password",
     "contrasena": "password",
+    "contraseña temporal": "password",
+    "contrasena temporal": "password",
     "clave": "password",
+    "clave temporal": "password",
+    "n": "_skip",
+    "no": "_skip",
+    "numero": "_skip",
+    "número": "_skip",
+    "#": "_skip",
 }
 REQUIRED_IMPORT_FIELDS = {"email", "nombre", "apellido"}
 
@@ -85,7 +94,8 @@ def _student_dto(user):
 
 def _normalize_header(value):
     value = str(value or "").strip().lower()
-    value = re.sub(r"[\s_\-]+", " ", value)
+    value = value.replace("°", "").replace("º", "").replace("#", "")
+    value = re.sub(r"[\s_\-]+", " ", value).strip()
     return IMPORT_HEADER_ALIASES.get(value, value)
 
 

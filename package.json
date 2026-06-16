@@ -6,6 +6,11 @@
   "scripts": {
     "up": "node scripts/dev-up.mjs",
     "down": "docker compose stop db",
-    "install:all": "npm install --prefix frontend"
+    "install:all": "npm install --prefix frontend",
+    "check:backend": "node scripts/run-backend.mjs check",
+    "test:backend": "node scripts/run-backend.mjs pytest -q",
+    "test:api:e2e": "node scripts/api-e2e.mjs",
+    "test:frontend": "npm test --prefix frontend -- --runInBand",
+    "build:frontend": "npm run build --prefix frontend"
   }
 }

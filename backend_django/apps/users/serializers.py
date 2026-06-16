@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import AccessToken
 
-from .models import UserRole
+from .models import AccessRequest, AccessRequestStatus, UserRole
 
 User = get_user_model()
 
@@ -117,6 +117,10 @@ class LoginSerializer(serializers.Serializer):
         return normalize_email_value(value)
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    credential = serializers.CharField(write_only=True)
+
+
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
@@ -130,3 +134,22 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
+
+
+class AccessRequestCreateSerializer(serializers.Serializer):
+    nombre = serializers.CharField(max_length=100)
+    apellido = serializers.CharField(max_length=100)
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return validate_common_email_domain(normalize_email_value(value))
+
+
+class AccessRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccessRequest
+        fields = ["id", "nombre", "apellido", "email", "status", "created_at", "reviewed_at"]
+
+
+class AccessRequestStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=AccessRequestStatus.choices)

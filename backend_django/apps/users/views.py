@@ -1,23 +1,55 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.exceptions import APIException
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from shared.permissions import IsAdmin
-from shared.response import api_ok
+from shared.response import api_created, api_ok
 
 from .serializers import (
+    AccessRequestCreateSerializer,
+    AccessRequestSerializer,
+    AccessRequestStatusSerializer,
     AdminUserStatusSerializer,
     AdminUserSerializer,
     AdminUserWriteSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     RegisterSerializer,
     UserSummarySerializer,
     generate_access_token,
+    normalize_email_value,
 )
+from .services import access_request_service
 
 User = get_user_model()
+
+
+class GoogleAuthenticationError(APIException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = "No fue posible iniciar sesión con Google"
+    default_code = "google_auth_failed"
+
+
+def verify_google_credential(credential, audience):
+    try:
+        from google.auth.transport import requests
+        from google.oauth2 import id_token
+    except ImportError as exc:
+        raise ValidationError("El proveedor de Google no está instalado en el backend") from exc
+
+    try:
+        return id_token.verify_oauth2_token(
+            credential,
+            requests.Request(),
+            audience,
+        )
+    except ValueError as exc:
+        raise GoogleAuthenticationError("No fue posible validar la cuenta de Google") from exc
 
 
 class LoginView(APIView):
@@ -42,6 +74,43 @@ class LoginView(APIView):
         })
 
 
+class GoogleLoginView(APIView):
+    """POST /api/auth/google - public Google Identity Services login."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "")
+        if not client_id:
+            raise ValidationError("El inicio de sesión con Google no está configurado")
+
+        ser = GoogleLoginSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        payload = verify_google_credential(ser.validated_data["credential"], client_id)
+
+        if not payload.get("email_verified"):
+            raise GoogleAuthenticationError("La cuenta de Google no tiene el correo verificado")
+
+        email = normalize_email_value(payload.get("email", ""))
+        if not email:
+            raise GoogleAuthenticationError("La cuenta de Google no entregó un correo válido")
+
+        try:
+            user = User.objects.filter(email=email).first()
+        except Exception as exc:
+            raise GoogleAuthenticationError(
+                "La cuenta de Google no está asociada a un usuario activo"
+            ) from exc
+
+        if not user or not user.activo:
+            raise GoogleAuthenticationError("La cuenta de Google no está asociada a un usuario activo")
+
+        return api_ok({
+            "token": generate_access_token(user),
+            "user": UserSummarySerializer(user).data,
+        })
+
+
 class RegisterView(APIView):
     """POST /api/auth/register — ADMIN only. Mirrors Spring AuthController.register."""
 
@@ -55,6 +124,49 @@ class RegisterView(APIView):
         user = ser.save()
         # Spring returns 200 OK with message + data.
         return api_ok(UserSummarySerializer(user).data, message="Usuario creado exitosamente")
+
+
+class AccessRequestCreateView(APIView):
+    """POST /api/auth/access-request — public student access request."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        ser = AccessRequestCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        created = access_request_service.create_access_request(**ser.validated_data)
+        return api_created(
+            AccessRequestSerializer(created).data,
+            message="Solicitud enviada. El administrador revisará tu acceso pronto.",
+        )
+
+
+class AdminAccessRequestListView(APIView):
+    """GET /api/admin/access-requests — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        status = request.query_params.get("status")
+        requests = access_request_service.list_access_requests(status=status)
+        return api_ok(AccessRequestSerializer(requests, many=True).data)
+
+
+class AdminAccessRequestStatusView(APIView):
+    """PATCH /api/admin/access-requests/<id>/status — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, request_id):
+        ser = AccessRequestStatusSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        updated = access_request_service.update_access_request_status(
+            request_id, status=ser.validated_data["status"]
+        )
+        return api_ok(
+            AccessRequestSerializer(updated).data,
+            message="Estado de solicitud actualizado.",
+        )
 
 
 class MeView(APIView):
@@ -79,6 +191,7 @@ class AdminUserListCreateView(APIView):
         ser = AdminUserWriteSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
+        access_request_service.resolve_pending_for_email(user.email)
         return api_ok(AdminUserSerializer(user).data, message="Usuario creado correctamente")
 
 

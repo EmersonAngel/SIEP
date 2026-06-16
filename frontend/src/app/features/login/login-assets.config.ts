@@ -30,6 +30,9 @@ export const LOGIN_ASSETS = {
   buttons: {
     google: 'assets/buttons/google.png',
     microsoft: 'assets/buttons/microsoft.png'
+  },
+  images: {
+    hero: 'assets/images/login/Login.jpeg'
   }
 } as const;
 

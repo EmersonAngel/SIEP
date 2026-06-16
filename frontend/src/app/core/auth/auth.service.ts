@@ -36,6 +36,17 @@ export class AuthService {
       }));
   }
 
+  loginWithGoogle(credential: string) {
+    return this.http.post<ApiResponse<LoginResponse>>(`${this.API}/google`, { credential })
+      .pipe(tap(res => {
+        this.saveSession(res.data.token, res.data.user);
+      }));
+  }
+
+  requestAccess(payload: { nombre: string; apellido: string; email: string }) {
+    return this.http.post<ApiResponse<{ id: number }>>(`${this.API}/access-request`, payload);
+  }
+
   saveSession(token: string, user: User): void {
     if (!token || this.isTokenExpired(token)) {
       this.clearSession();

@@ -1,4 +1,4 @@
-import { AvatarConfig, HairVariantId } from '../character/avatar.model';
+import { AvatarConfig, HAIR_VARIANTS } from '../character/avatar.model';
 import { defaultAvatar, hairVariantPatch } from '../character/avatar-config.util';
 import { SceneMapDefinition, WorldObject, WorldObjectType } from '../../core/models/simulation.model';
 import { backgroundImage, cameraZoom, setBackgroundImage, setCameraZoom } from './world-editor/room-edit.util';
@@ -28,7 +28,7 @@ export interface AuthoringObjectTemplate {
 export interface AuthoringNpcTemplate {
   id: string;
   label: string;
-  gender: 'female' | 'male' | 'neutral';
+  gender: 'female' | 'male';
   avatar: AvatarConfig;
 }
 
@@ -75,7 +75,7 @@ export const AUTHORING_OBJECT_TEMPLATES: AuthoringObjectTemplate[] = [
     interactionText: '',
     width: 48,
     height: 64,
-    metadata: { gender: 'female', avatar: { ...defaultAvatar(), ...hairVariantPatch('long_brown'), mouth: 'seria' } },
+    metadata: { gender: 'female', avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'purple', ...hairVariantPatch('long_brown'), mouth: 'seria' } },
   },
   {
     id: 'question',
@@ -133,35 +133,29 @@ export const AUTHORING_NPC_TEMPLATES: AuthoringNpcTemplate[] = [
     id: 'mujer-adulta',
     label: 'Mujer adulta',
     gender: 'female',
-    avatar: { ...defaultAvatar(), ...hairVariantPatch('long_brown'), mouth: 'seria', eyes: 'amables', brows: 'suaves' },
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'burgundy', ...hairVariantPatch('long_brown'), mouth: 'seria', eyes: 'amables', brows: 'suaves' },
   },
   {
     id: 'hombre-adulto',
     label: 'Hombre adulto',
     gender: 'male',
-    avatar: { ...defaultAvatar(), ...hairVariantPatch('short_black'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'media' },
+    avatar: { ...defaultAvatar(), gender: 'male', clothingColor: 'blue', ...hairVariantPatch('short_black'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'media' },
   },
   {
     id: 'adolescente',
     label: 'Adolescente',
-    gender: 'neutral',
-    avatar: { ...defaultAvatar(), ...hairVariantPatch('red'), mouth: 'seria', eyes: 'neutros', brows: 'suaves', skinTone: 'clara' },
+    gender: 'female',
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'green', ...hairVariantPatch('medium_red'), mouth: 'seria', eyes: 'neutros', brows: 'suaves', skinTone: 'clara' },
   },
   {
     id: 'profesional',
     label: 'Profesional',
     gender: 'female',
-    avatar: { ...defaultAvatar(), ...hairVariantPatch('tied_brown'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'morena' },
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'gray', ...hairVariantPatch('tied_brown'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'morena' },
   },
 ];
 
-export const AUTHORING_HAIR_VARIANTS: Array<{ id: HairVariantId; label: string }> = [
-  { id: 'short_black', label: 'Corto negro' },
-  { id: 'long_brown', label: 'Largo castano' },
-  { id: 'tied_brown', label: 'Recogido castano' },
-  { id: 'red', label: 'Rojizo' },
-  { id: 'none', label: 'Sin cabello' },
-];
+export const AUTHORING_HAIR_VARIANTS = HAIR_VARIANTS;
 
 export function applySceneTemplate(map: SceneMapDefinition, template: AuthoringSceneTemplate): SceneMapDefinition {
   const ambient = setCameraZoom(setBackgroundImage(map.ambient, template.backgroundImage), template.cameraZoom);
