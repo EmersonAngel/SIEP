@@ -55,6 +55,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/simulator/instructor-trace.component').then(m => m.InstructorTraceComponent)
       },
       {
+        path: 'rubricas',
+        canActivate: [roleGuard('PROFESOR', 'ADMIN')],
+        loadComponent: () => import('./features/admin/rubrics.component').then(m => m.RubricsComponent)
+      },
+      {
         path: 'grupos',
         canActivate: [roleGuard('PROFESOR')],
         loadComponent: () => import('./features/grupos/grupo-list.component').then(m => m.GrupoListComponent)
@@ -75,6 +80,7 @@ export const routes: Routes = [
   { path: 'simulador', redirectTo: 'portal/simulador', pathMatch: 'full' },
   { path: 'casos', redirectTo: 'portal/casos', pathMatch: 'full' },
   { path: 'docente', redirectTo: 'portal/docente/trazabilidad', pathMatch: 'full' },
+  { path: 'rubricas', redirectTo: 'portal/rubricas', pathMatch: 'full' },
   { path: 'grupos', redirectTo: 'portal/grupos', pathMatch: 'full' },
   { path: 'reportes', redirectTo: 'portal/reportes', pathMatch: 'full' },
   { path: 'usuarios', redirectTo: 'portal/admin/usuarios', pathMatch: 'full' },

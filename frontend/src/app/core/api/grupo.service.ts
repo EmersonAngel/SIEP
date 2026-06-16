@@ -21,8 +21,10 @@ export interface GrupoEstudiante {
 
 export interface GrupoImportError {
   row: number;
-  email: string;
-  error: string;
+  field?: string;
+  email?: string;
+  message?: string;
+  error?: string;
 }
 
 export interface GrupoImportResult {
@@ -30,10 +32,22 @@ export interface GrupoImportResult {
   created: number;
   existing: number;
   assigned: number;
+  associated: number;
+  skipped: number;
   duplicated: number;
   errors: GrupoImportError[];
   students: GrupoEstudiante[];
   defaultPassword: string;
+  expectedColumns: string[];
+  message: string;
+}
+
+export interface GrupoImportSpec {
+  requiredColumns: string[];
+  optionalColumns: string[];
+  columns: string[];
+  templateFilename: string;
+  acceptedExtensions: string[];
 }
 
 interface ApiResponse<T> { data: T; message?: string | null; success?: boolean; }
@@ -59,8 +73,20 @@ export class GrupoService {
   importarEstudiantes(grupoId: number, file: File) {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<ApiResponse<GrupoImportResult>>(`${this.API}/${grupoId}/estudiantes/import`, formData)
+    return this.http.post<ApiResponse<GrupoImportResult>>(`${this.API}/${grupoId}/estudiantes/import/`, formData)
       .pipe(map(r => r.data));
+  }
+
+  importSpec() {
+    return this.http.get<ApiResponse<GrupoImportSpec>>(`${this.API}/estudiantes/import/spec/`)
+      .pipe(map(r => r.data));
+  }
+
+  descargarPlantillaImportacion() {
+    return this.http.get(`${this.API}/estudiantes/import/template/`, {
+      responseType: 'blob',
+      observe: 'response'
+    });
   }
 
   listarEstudiantes(grupoId: number) {

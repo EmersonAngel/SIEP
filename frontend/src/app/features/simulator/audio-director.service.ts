@@ -196,7 +196,13 @@ export class AudioDirectorService {
   pause(): void { this.stems.forEach(s => s.howl.pause()); }
 
   resume(): void {
-    this.stems.forEach(s => { if (!s.howl.playing()) s.howl.play(); });
+    this.stems.forEach(s => {
+      try {
+        if (!s.howl.playing()) s.howl.play();
+      } catch {
+        // Browsers can close the WebAudio context after route changes or teardown.
+      }
+    });
   }
 
   stopAll(): void {

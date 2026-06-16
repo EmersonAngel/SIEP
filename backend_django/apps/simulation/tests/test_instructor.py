@@ -144,11 +144,11 @@ def test_save_rubric_evaluation(estudiante, profesor, case_version_id):
     assert resp.status_code == 200
     assert resp.data["message"] == "Rubrica guardada"
     saved = resp.data["data"]
-    assert saved["totalScore"] == 3 * len(criteria)
+    assert saved["totalScore"] == 3.0
     assert saved["comment"] == "Buen desempeño"
     assert len(saved["scores"]) == len(criteria)
 
     # appears in the trace's rubric evaluations
     trace = p.get(f"/api/instructor/attempts/{attempt_id}/trace").data["data"]
     assert len(trace["rubricEvaluations"]) >= 1
-    assert trace["rubricEvaluations"][0]["totalScore"] == 3 * len(criteria)
+    assert trace["rubricEvaluations"][0]["totalScore"] == 3.0

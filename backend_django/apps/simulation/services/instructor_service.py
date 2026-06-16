@@ -21,6 +21,7 @@ from ..models import (
     SimulationAttempt,
 )
 from . import crypto_service, world_service
+from . import rubric_service
 
 
 def _dt(value):
@@ -55,6 +56,7 @@ def _require_attempt(attempt_id):
 def recent_attempts():
     attempts = (
         SimulationAttempt.objects.select_related("case_version__simulation_case", "student")
+        .filter(case_version__status="PUBLISHED", case_version__simulation_case__active=True)
         .order_by("-started_at")[:20]
     )
     return [
@@ -122,58 +124,14 @@ def trace(attempt_id):
 
 
 def rubric(attempt_id):
-    attempt = _require_attempt(attempt_id)
-    rubric_obj = (
-        Rubric.objects.filter(case_version_id=attempt.case_version_id, active=True)
-        .order_by("id")
-        .first()
-    )
-    if not rubric_obj:
-        raise NotFound("Rubrica no encontrada")
-    return _rubric_view(rubric_obj, [], None, None)
+    _require_attempt(attempt_id)
+    return rubric_service.attempt_rubric_view(attempt_id)
 
 
 @transaction.atomic
 def save_rubric(attempt_id, request, instructor):
-    attempt = _require_attempt(attempt_id)
-    rubric_obj = Rubric.objects.filter(pk=request.get("rubricId")).first()
-    if not rubric_obj:
-        raise NotFound("Rubrica no encontrada")
-
-    evaluation = RubricEvaluation.objects.filter(
-        attempt_id=attempt_id, rubric_id=rubric_obj.id, instructor_id=instructor.id
-    ).first()
-    if not evaluation:
-        evaluation = RubricEvaluation()
-    evaluation.attempt = attempt
-    evaluation.rubric = rubric_obj
-    evaluation.instructor = instructor
-    evaluation.comment = request.get("comment")
-
-    scores_input = request.get("scores") or []
-    total = sum(float(s.get("score") or 0) for s in scores_input)
-    evaluation.total_score = total
-    evaluation.save()
-
-    CriterionScore.objects.filter(rubric_evaluation_id=evaluation.id).delete()
-    for s in scores_input:
-        criterion = RubricCriterion.objects.filter(pk=s.get("criterionId")).first()
-        if not criterion:
-            raise NotFound("Criterio no encontrado")
-        CriterionScore.objects.create(
-            rubric_evaluation=evaluation,
-            rubric_criterion=criterion,
-            score=float(s.get("score") or 0),
-            comment=s.get("comment"),
-            evidence_json="{}",
-        )
-
-    scores = list(
-        CriterionScore.objects.filter(rubric_evaluation_id=evaluation.id)
-        .select_related("rubric_criterion")
-        .order_by("id")
-    )
-    return _rubric_view(rubric_obj, scores, total, evaluation.comment)
+    _require_attempt(attempt_id)
+    return rubric_service.save_attempt_evaluation(attempt_id, request, instructor)
 
 
 # ─── DTO builders ─────────────────────────────────────────────────────────────

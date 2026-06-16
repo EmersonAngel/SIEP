@@ -10,7 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { GrupoService, Grupo, GrupoEstudiante, GrupoImportError, GrupoImportResult } from '../../core/api/grupo.service';
+import { GrupoService, Grupo, GrupoEstudiante, GrupoImportError, GrupoImportResult, GrupoImportSpec } from '../../core/api/grupo.service';
 import { mapAgregarEstudianteError } from '../../core/api/grupo-error.utils';
 import { SimulationService } from '../../core/api/simulation.service';
 import { SimulationCaseSummary } from '../../core/models/simulation.model';
@@ -111,12 +111,16 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
               <div class="student-import">
                 <div class="student-import__copy">
                   <strong>Cargar estudiantes por Excel</strong>
-                  <span>Columnas requeridas: nombre, apellido y email. La columna password es opcional.</span>
+                  <span>Columnas requeridas: {{ columnasRequeridasTexto() }}. Opcionales: {{ columnasOpcionalesTexto() }}.</span>
                 </div>
+                <button class="psy-button psy-button--ghost" type="button" (click)="descargarPlantilla()">
+                  <mat-icon aria-hidden="true">download</mat-icon>
+                  Descargar plantilla Excel
+                </button>
                 <label class="file-picker">
                   <mat-icon aria-hidden="true">upload_file</mat-icon>
-                  <span>{{ importFileName() || 'Seleccionar .xlsx o .csv' }}</span>
-                  <input type="file" accept=".xlsx,.csv" (change)="seleccionarArchivoImportacion($event)">
+                  <span>{{ importFileName() || 'Seleccionar .xlsx' }}</span>
+                  <input type="file" accept=".xlsx" (change)="seleccionarArchivoImportacion($event)">
                 </label>
                 <button class="psy-button psy-button--primary" type="button"
                   [disabled]="!archivoImportacion() || importandoEstudiantes()"
@@ -128,15 +132,16 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
               @if (resultadoImportacion(); as result) {
                 <div class="import-result" [class.import-result--warning]="result.errors.length">
                   <strong>
-                    {{ result.assigned }} asignados · {{ result.created }} creados · {{ result.existing }} existentes
+                    {{ result.associated || result.assigned }} asociados · {{ result.created }} creados · {{ result.existing }} existentes · {{ result.skipped }} omitidos
                   </strong>
+                  <span>{{ result.message }}</span>
                   <span>Contraseña por defecto para nuevos sin password: {{ result.defaultPassword }}</span>
                   @if (result.errors.length) {
                     <details>
                       <summary>{{ result.errors.length }} filas con observaciones</summary>
                       <ul>
                         @for (item of result.errors; track item.row) {
-                          <li>Fila {{ item.row }} · {{ item.email || 'sin correo' }}: {{ item.error }}</li>
+                          <li>Fila {{ item.row }} · {{ item.field || 'archivo' }} · {{ item.email || 'sin correo' }}: {{ item.message || item.error }}</li>
                         }
                       </ul>
                     </details>
@@ -338,6 +343,7 @@ export class GrupoListComponent implements OnInit {
   casosDisponibles = signal<SimulationCaseSummary[]>([]);
   casosAsignados = signal<SimulationCaseSummary[]>([]);
   mensajeEstudiante = signal('');
+  importSpec = signal<GrupoImportSpec | null>(null);
   archivoImportacion = signal<File | null>(null);
   resultadoImportacion = signal<GrupoImportResult | null>(null);
   erroresImportacion = signal<GrupoImportError[]>([]);
@@ -357,6 +363,16 @@ export class GrupoListComponent implements OnInit {
 
   ngOnInit() {
     this.cargar();
+    this.grupoService.importSpec().subscribe({
+      next: spec => this.importSpec.set(spec),
+      error: () => this.importSpec.set({
+        requiredColumns: ['nombre', 'apellido', 'email'],
+        optionalColumns: ['password'],
+        columns: ['nombre', 'apellido', 'email', 'password'],
+        templateFilename: 'plantilla_importacion_estudiantes_siep.xlsx',
+        acceptedExtensions: ['.xlsx']
+      })
+    });
     this.simulationService.listCases().subscribe({
       next: cases => this.casosDisponibles.set(cases),
       error: () => this.casosDisponibles.set([])
@@ -466,14 +482,42 @@ export class GrupoListComponent implements OnInit {
     return this.archivoImportacion()?.name ?? '';
   }
 
+  columnasRequeridasTexto(): string {
+    return this.importSpec()?.requiredColumns.join(', ') || 'nombre, apellido, email';
+  }
+
+  columnasOpcionalesTexto(): string {
+    return this.importSpec()?.optionalColumns.join(', ') || 'password';
+  }
+
+  descargarPlantilla(): void {
+    this.grupoService.descargarPlantillaImportacion().subscribe({
+      next: response => {
+        const blob = response.body;
+        if (!blob) return;
+        const filename = this.importSpec()?.templateFilename || 'plantilla_importacion_estudiantes_siep.xlsx';
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.mensajeEstudiante.set('No fue posible descargar la plantilla Excel.');
+        this.mensajeEsError.set(true);
+      }
+    });
+  }
+
   seleccionarArchivoImportacion(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
     this.archivoImportacion.set(file);
     this.resultadoImportacion.set(null);
     this.erroresImportacion.set([]);
-    if (file && !/\.(xlsx|csv)$/i.test(file.name)) {
-      this.mensajeEstudiante.set('Selecciona un archivo .xlsx o .csv.');
+    if (file && !/\.xlsx$/i.test(file.name)) {
+      this.mensajeEstudiante.set('Selecciona un archivo .xlsx.');
       this.mensajeEsError.set(true);
       this.archivoImportacion.set(null);
       input.value = '';
@@ -499,6 +543,11 @@ export class GrupoListComponent implements OnInit {
         this.cargarDetalle(grupo.id);
       },
       error: (err: HttpErrorResponse) => {
+        const result = err.error?.data as GrupoImportResult | undefined;
+        if (result) {
+          this.resultadoImportacion.set(result);
+          this.erroresImportacion.set(result.errors ?? []);
+        }
         this.mensajeEstudiante.set(err.error?.message || 'No fue posible importar el archivo.');
         this.mensajeEsError.set(true);
         this.importandoEstudiantes.set(false);

@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -929,10 +930,10 @@ export class InstructorTraceComponent implements OnInit {
 
     this.simulationService.attemptTrace(attempt.attemptId).subscribe({
       next: trace => {
-        this.trace.set(trace);
+        this.trace.set(this.normalizeTrace(trace));
         this.loadRubric(attempt.attemptId);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.trace.set(null);
         this.rubric.set(null);
         this.error.set('Intenta nuevamente o verifica tus permisos.');
@@ -1120,12 +1121,42 @@ export class InstructorTraceComponent implements OnInit {
     return text;
   }
 
+  private normalizeTrace(trace: AttemptTrace): AttemptTrace {
+    return {
+      ...trace,
+      phaseDurations: trace.phaseDurations ?? [],
+      events: trace.events ?? [],
+      reflections: trace.reflections ?? [],
+      rubricEvaluations: trace.rubricEvaluations ?? [],
+    };
+  }
+
+  private normalizeRubric(rubric: RubricEvaluationView): RubricEvaluationView {
+    return {
+      ...rubric,
+      criteria: rubric.criteria ?? [],
+      scores: rubric.scores ?? [],
+    };
+  }
+
   private loadAttempts() {
     this.loading.set(true);
     this.error.set('');
     this.simulationService.recentAttempts().subscribe({
       next: attempts => {
+        attempts = attempts ?? [];
         this.attempts.set(attempts);
+        const err = { status: -1 };
+        if (err.status === 404) {
+          this.error.set('No se encontró el intento solicitado.');
+        } else if (err.status === 403) {
+          this.error.set('No tienes permisos para evaluar este intento.');
+        } else if (err.status === 0) {
+          this.error.set('No fue posible conectar con el servidor.');
+        } else {
+          this.error.set('No hay rúbrica disponible para este caso o no fue posible cargarla.');
+        }
+        this.error.set('');
         this.loading.set(false);
         if (attempts.length && !this.trace()) {
           this.open(attempts[0]);
@@ -1141,13 +1172,23 @@ export class InstructorTraceComponent implements OnInit {
   private loadRubric(attemptId: string) {
     this.simulationService.rubric(attemptId).subscribe({
       next: rubric => {
+        rubric = this.normalizeRubric(rubric);
         this.rubric.set(rubric);
         this.seedRubricForm(rubric);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.rubric.set(null);
         this.error.set('No hay rúbrica disponible para este caso o no tienes permisos para evaluarla.');
+        if (err.status === 404) {
+          this.error.set('No se encontró el intento solicitado.');
+        } else if (err.status === 403) {
+          this.error.set('No tienes permisos para evaluar este intento.');
+        } else if (err.status === 0) {
+          this.error.set('No fue posible conectar con el servidor.');
+        } else {
+          this.error.set('No hay rúbrica disponible para este caso o no fue posible cargarla.');
+        }
         this.loading.set(false);
       }
     });
@@ -1155,7 +1196,7 @@ export class InstructorTraceComponent implements OnInit {
 
   private refreshTrace(attemptId: string) {
     this.simulationService.attemptTrace(attemptId).subscribe({
-      next: trace => this.trace.set(trace),
+      next: trace => this.trace.set(this.normalizeTrace(trace)),
       error: () => undefined
     });
   }

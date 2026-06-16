@@ -358,7 +358,13 @@ class DataDrivenWorldScene extends Phaser.Scene {
 
   setSfxMuted(muted: boolean) {
     this.callbacks.sfxMuted = muted;
-    this.sound.mute = muted;
+    const sound = this.sound as Phaser.Sound.BaseSoundManager | undefined;
+    if (!sound) return;
+    try {
+      sound.mute = muted;
+    } catch {
+      // Phaser can call this after the scene has been destroyed during route changes.
+    }
   }
 
   /**

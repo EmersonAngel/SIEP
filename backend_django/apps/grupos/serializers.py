@@ -15,8 +15,8 @@ class ImportarEstudiantesSerializer(serializers.Serializer):
 
     def validate_file(self, value):
         name = (value.name or "").lower()
-        if not (name.endswith(".xlsx") or name.endswith(".csv")):
-            raise serializers.ValidationError("Carga un archivo .xlsx o .csv")
+        if not name.endswith(".xlsx"):
+            raise serializers.ValidationError("Carga un archivo .xlsx")
         return value
 
 

@@ -67,6 +67,15 @@ def _add_student(grupo, estudiante):
         )
 
 
+def _assign_case(grupo, case_version_id):
+    with connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO grupo_case_version (grupo_id, case_version_id) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            [grupo.id, case_version_id],
+        )
+
+
 # --- permissions -----------------------------------------------------------
 def test_dashboard_forbidden_for_estudiante(estudiante):
     assert cl(estudiante).get("/api/reportes/dashboard").status_code == 403
@@ -107,15 +116,17 @@ def test_grupo_report_no_version_is_empty(profesor):
 def test_grupo_report_simulation_block(profesor, estudiante, case_version_id):
     grupo = _grupo(profesor)
     _add_student(grupo, estudiante)
+    _assign_case(grupo, case_version_id)
     c = cl(estudiante)
     start = c.post(
         "/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json"
     ).data["data"]
     token, attempt_id = start["attemptToken"], start["attemptId"]
-    option_id = start["currentNode"]["options"][0]["id"]
+    options = start["currentNode"]["options"]
+    option = next((o for o in options if o["classification"] == "ADEQUATE"), options[0])
     c.post(
         f"/api/simulation/attempts/{attempt_id}/decisions",
-        {"attemptToken": token, "decisionOptionId": option_id},
+        {"attemptToken": token, "decisionOptionId": option["id"]},
         format="json",
     )
     d = cl(profesor).get(
@@ -139,6 +150,7 @@ def test_grupo_report_simulation_block(profesor, estudiante, case_version_id):
 def test_export_csv_simulation_format(profesor, estudiante, case_version_id):
     grupo = _grupo(profesor)
     _add_student(grupo, estudiante)
+    _assign_case(grupo, case_version_id)
     cl(estudiante).post(
         "/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json"
     )

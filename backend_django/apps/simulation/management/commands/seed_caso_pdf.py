@@ -23,7 +23,8 @@ PUBLISHED del caso pasan a ARCHIVED para que el catálogo muestre solo esta.
 """
 import json
 
-from django.core.management.base import BaseCommand, CommandError
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
@@ -47,7 +48,7 @@ from apps.simulation.models import (
 CASE_CODE = "SIM-VBG-001"
 #: Casos legacy del mismo dominio que deben retirarse del catálogo al sembrar
 #: el canónico (evita que aparezcan casos de feminicidio duplicados).
-LEGACY_DUPLICATE_CASE_CODES = ("SOC-FEM-001",)
+LEGACY_DUPLICATE_CASE_CODES = ("SOC-FEM-001", "VBG-001")
 CASE_TITLE = "Violencia Familiar y Tentativa de Feminicidio"
 CASE_DESCRIPTION = (
     "Caso formativo basado en el documento canónico de Psicología Social: "
@@ -987,9 +988,32 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        User = get_user_model()
+        creator = User.objects.filter(email="admin@psychosim.edu.co").first()
+        if not creator:
+            creator = User.objects.create_user(
+                email="admin@psychosim.edu.co",
+                password="Admin123!",
+                nombre="Admin",
+                apellido="SIEP",
+                role="ADMIN",
+                activo=True,
+            )
+        elif not creator.check_password("Admin123!"):
+            creator.set_password("Admin123!")
+            creator.activo = True
+            creator.role = "ADMIN"
+            creator.save()
+
         case = SimulationCase.objects.filter(code=options["case_code"]).first()
         if not case:
-            raise CommandError(f"No existe el caso {options['case_code']}")
+            case = SimulationCase.objects.create(
+                code=options["case_code"],
+                title=CASE_TITLE,
+                description=CASE_DESCRIPTION,
+                active=True,
+                created_by=creator,
+            )
 
         case.title = CASE_TITLE
         case.description = CASE_DESCRIPTION
@@ -1191,6 +1215,61 @@ class Command(BaseCommand):
                 self.stdout.write(f"Rúbrica clonada desde la versión {source_rubric.case_version_id}")
 
         # ── Archivar otras versiones publicadas (catálogo = solo esta) ───────
+        if not Rubric.objects.filter(case_version_id=version.id, active=True).exists():
+            rubric = Rubric.objects.create(
+                case_version=version,
+                name="Rubrica formativa SIM-VBG-001",
+                description=(
+                    "Evaluacion docente del recorrido: contencion en crisis, "
+                    "marco normativo, enfoque de derechos, etica profesional "
+                    "y articulacion institucional."
+                ),
+                active=True,
+                created_by=creator,
+            )
+            default_criteria = [
+                (
+                    "INTERVENCION_CRISIS",
+                    "Contencion y primeros auxilios psicologicos",
+                    "Evalua estabilizacion emocional, escucha activa y manejo de noticia dificil.",
+                    20,
+                ),
+                (
+                    "MARCO_NORMATIVO",
+                    "Aplicacion del marco normativo",
+                    "Valora el uso pertinente de Resolucion 459, Ley 1257, Ley 2126 y Ley 1098.",
+                    20,
+                ),
+                (
+                    "ENFOQUE_DERECHOS",
+                    "Proteccion, riesgo y no revictimizacion",
+                    "Mide valoracion de riesgo, medidas de proteccion y rechazo de practicas revictimizantes.",
+                    20,
+                ),
+                (
+                    "ETICA_PROFESIONAL",
+                    "Decision tecnica y etica",
+                    "Valora confidencialidad, prudencia, limites profesionales y actuacion interdisciplinaria.",
+                    20,
+                ),
+                (
+                    "TRAZABILIDAD",
+                    "Reflexion y trazabilidad del caso",
+                    "Evalua coherencia del recorrido, uso de herramientas y reflexion pedagogica.",
+                    20,
+                ),
+            ]
+            for order, (competency, title, description, max_score) in enumerate(default_criteria, start=1):
+                RubricCriterion.objects.create(
+                    rubric=rubric,
+                    competency=competency,
+                    title=title,
+                    description=description,
+                    max_score=max_score,
+                    display_order=order,
+                )
+            self.stdout.write("Rubrica formativa creada para SIM-VBG-001")
+
         archived = (
             CaseVersion.objects.filter(simulation_case=case, status="PUBLISHED")
             .exclude(pk=version.id)

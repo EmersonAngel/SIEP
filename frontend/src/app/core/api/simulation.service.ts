@@ -179,12 +179,12 @@ export class SimulationService {
   }
 
   rubric(attemptId: string) {
-    return this.http.get<ApiResponse<RubricEvaluationView>>(`/api/instructor/attempts/${attemptId}/rubric-evaluation`)
+    return this.http.get<ApiResponse<RubricEvaluationView>>(`/api/instructor/attempts/${attemptId}/rubric-evaluation/`)
       .pipe(map(response => response.data));
   }
 
   saveRubric(attemptId: string, rubricId: number, comment: string, scores: { criterionId: number; score: number; comment: string }[]) {
-    return this.http.post<ApiResponse<RubricEvaluationView>>(`/api/instructor/attempts/${attemptId}/rubric-evaluation`, {
+    return this.http.put<ApiResponse<RubricEvaluationView>>(`/api/instructor/attempts/${attemptId}/rubric-evaluation/`, {
       rubricId,
       comment,
       scores
