@@ -1,4 +1,4 @@
-import { AvatarConfig } from '../character/avatar.model';
+import { AvatarConfig, Expression } from '../character/avatar.model';
 import { NpcAvatarPresetKey } from '../../core/models/simulation.model';
 
 /**
@@ -15,62 +15,83 @@ import { NpcAvatarPresetKey } from '../../core/models/simulation.model';
  * = { hairStyle: 'medio', hairColor: 'rojizo' } (variante con arte `red`).
  */
 export const NPC_AVATAR_PRESETS: Record<NpcAvatarPresetKey, AvatarConfig> = {
+  // `mouth` = expresión base del NPC acorde al momento que atraviesa en su
+  // escena (ver EXPRESSIONS). La emoción de cada línea de diálogo puede
+  // sobreescribirla en runtime vía emotionToExpression().
   'madre-vbg': {
     gender: 'female', clothingColor: 'burgundy',
     skinTone: 'media', hairStyle: 'largo', hairColor: 'castano', fringe: false,
-    eyes: 'amables', brows: 'suaves', mouth: 'seria', accessory: 'ninguno',
+    eyes: 'amables', brows: 'suaves', mouth: 'worried', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'paciente-vbg': {
     gender: 'female', clothingColor: 'gray',
     skinTone: 'clara', hairStyle: 'largo', hairColor: 'castano', fringe: false,
-    eyes: 'neutros', brows: 'marcadas', mouth: 'seria', accessory: 'ninguno',
+    eyes: 'neutros', brows: 'marcadas', mouth: 'sad', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'colega-clinica': {
     gender: 'female', clothingColor: 'green',
     skinTone: 'morena', hairStyle: 'recogido', hairColor: 'castano', fringe: false,
-    eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'pin',
+    eyes: 'atentos', brows: 'rectas', mouth: 'neutral', accessory: 'pin',
     uniform: 'sin-bata',
   },
   'supervisor-clinico': {
     gender: 'male', clothingColor: 'blue',
     skinTone: 'media', hairStyle: 'corto', hairColor: 'negro', fringe: false,
-    eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'ninguno',
+    eyes: 'atentos', brows: 'rectas', mouth: 'neutral', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'seguridad': {
     gender: 'male', clothingColor: 'gray',
     skinTone: 'morena', hairStyle: 'corto', hairColor: 'negro', fringe: false,
-    eyes: 'neutros', brows: 'marcadas', mouth: 'neutra', accessory: 'ninguno',
+    eyes: 'neutros', brows: 'marcadas', mouth: 'neutral', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'adolescente-nna': {
     gender: 'female', clothingColor: 'purple',
     skinTone: 'clara', hairStyle: 'medio', hairColor: 'rojizo', fringe: false,
-    eyes: 'neutros', brows: 'suaves', mouth: 'seria', accessory: 'ninguno',
+    eyes: 'neutros', brows: 'suaves', mouth: 'worried', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   // ── Caso PDF (hospital + comisaría) ──
   'psicologa-hospitalaria': {
     gender: 'female', clothingColor: 'green',
     skinTone: 'media', hairStyle: 'recogido', hairColor: 'castano', fringe: false,
-    eyes: 'amables', brows: 'suaves', mouth: 'neutra', accessory: 'pin',
+    eyes: 'amables', brows: 'suaves', mouth: 'happy', accessory: 'pin',
     uniform: 'sin-bata',
   },
   'funcionaria-recepcion': {
     gender: 'female', clothingColor: 'blue',
     skinTone: 'clara', hairStyle: 'medio', hairColor: 'rojizo', fringe: false,
-    eyes: 'neutros', brows: 'rectas', mouth: 'neutra', accessory: 'ninguno',
+    eyes: 'neutros', brows: 'rectas', mouth: 'neutral', accessory: 'ninguno',
     uniform: 'sin-bata',
   },
   'comisaria-profesional': {
     gender: 'female', clothingColor: 'purple',
     skinTone: 'morena', hairStyle: 'corto', hairColor: 'negro', fringe: false,
-    eyes: 'atentos', brows: 'rectas', mouth: 'neutra', accessory: 'pin',
+    eyes: 'atentos', brows: 'rectas', mouth: 'neutral', accessory: 'pin',
     uniform: 'sin-bata',
   },
 };
+
+/**
+ * Mapea la emoción de una línea de diálogo (DialogueState.emotion del backend)
+ * a una expresión facial del avatar modular, para que el NPC refleje el momento
+ * que está atravesando mientras habla.
+ */
+export function emotionToExpression(
+  emotion: string | null | undefined,
+  base: Expression = 'neutral',
+): Expression {
+  switch (emotion) {
+    case 'positive': return 'happy';
+    case 'concerned': return 'worried';
+    case 'danger': return 'sad';
+    case 'neutral': return base;
+    default: return base;
+  }
+}
 
 export interface NpcPresetRenderHints {
   /** Escala de render (jugador = 0.85; adultos 0.78-0.85; adolescente 0.70-0.76). */

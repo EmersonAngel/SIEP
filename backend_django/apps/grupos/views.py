@@ -10,6 +10,7 @@ from shared.response import api_ok
 from . import services
 from .import_contract import STUDENT_IMPORT_TEMPLATE_FILENAME
 from .serializers import (
+    ActualizarGrupoSerializer,
     AgregarEstudianteSerializer,
     AsignarCasoSerializer,
     CrearGrupoSerializer,
@@ -30,6 +31,27 @@ class GrupoListCreateView(APIView):
         return api_ok(dto, message="Grupo creado", http_status=201)
 
 
+class GrupoDetailView(APIView):
+    permission_classes = [IsProfesor]
+
+    def put(self, request, pk):
+        ser = ActualizarGrupoSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        dto = services.actualizar(
+            pk,
+            ser.validated_data.get("nombre"),
+            ser.validated_data.get("codigo"),
+            request.user,
+        )
+        return api_ok(dto, message="Grupo actualizado")
+
+    def patch(self, request, pk):
+        return self.put(request, pk)
+
+    def delete(self, request, pk):
+        return api_ok(services.eliminar(pk, request.user), message="Grupo eliminado")
+
+
 class GrupoEstudiantesView(APIView):
     permission_classes = [IsProfesor]
 
@@ -41,6 +63,14 @@ class GrupoEstudiantesView(APIView):
         ser.is_valid(raise_exception=True)
         dto = services.agregar_estudiante(pk, ser.validated_data["email"], request.user)
         return api_ok(dto, message="Estudiante agregado")
+
+
+class GrupoEstudianteDetailView(APIView):
+    permission_classes = [IsProfesor]
+
+    def delete(self, request, pk, estudiante_id):
+        dto = services.quitar_estudiante(pk, estudiante_id, request.user)
+        return api_ok(dto, message="Estudiante retirado")
 
 
 class GrupoEstudiantesImportView(APIView):

@@ -75,7 +75,7 @@ export const AUTHORING_OBJECT_TEMPLATES: AuthoringObjectTemplate[] = [
     interactionText: '',
     width: 48,
     height: 64,
-    metadata: { gender: 'female', avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'purple', ...hairVariantPatch('long_brown'), mouth: 'seria' } },
+    metadata: { gender: 'female', avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'purple', ...hairVariantPatch('long_brown'), mouth: 'worried' } },
   },
   {
     id: 'question',
@@ -133,25 +133,25 @@ export const AUTHORING_NPC_TEMPLATES: AuthoringNpcTemplate[] = [
     id: 'mujer-adulta',
     label: 'Mujer adulta',
     gender: 'female',
-    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'burgundy', ...hairVariantPatch('long_brown'), mouth: 'seria', eyes: 'amables', brows: 'suaves' },
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'burgundy', ...hairVariantPatch('long_brown'), mouth: 'worried', eyes: 'amables', brows: 'suaves' },
   },
   {
     id: 'hombre-adulto',
     label: 'Hombre adulto',
     gender: 'male',
-    avatar: { ...defaultAvatar(), gender: 'male', clothingColor: 'blue', ...hairVariantPatch('short_black'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'media' },
+    avatar: { ...defaultAvatar(), gender: 'male', clothingColor: 'blue', ...hairVariantPatch('short_black'), mouth: 'neutral', eyes: 'atentos', brows: 'rectas', skinTone: 'media' },
   },
   {
     id: 'adolescente',
     label: 'Adolescente',
     gender: 'female',
-    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'green', ...hairVariantPatch('medium_red'), mouth: 'seria', eyes: 'neutros', brows: 'suaves', skinTone: 'clara' },
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'green', ...hairVariantPatch('medium_red'), mouth: 'worried', eyes: 'neutros', brows: 'suaves', skinTone: 'clara' },
   },
   {
     id: 'profesional',
     label: 'Profesional',
     gender: 'female',
-    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'gray', ...hairVariantPatch('tied_brown'), mouth: 'neutra', eyes: 'atentos', brows: 'rectas', skinTone: 'morena' },
+    avatar: { ...defaultAvatar(), gender: 'female', clothingColor: 'gray', ...hairVariantPatch('tied_brown'), mouth: 'neutral', eyes: 'atentos', brows: 'rectas', skinTone: 'morena' },
   },
 ];
 

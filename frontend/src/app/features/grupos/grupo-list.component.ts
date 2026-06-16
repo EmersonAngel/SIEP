@@ -74,11 +74,13 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
       <!-- Formulario nuevo grupo -->
       <mat-card class="form-card panel-card">
         <mat-card-header>
-          <mat-card-title>Nuevo grupo</mat-card-title>
-          <mat-card-subtitle>Crea una cohorte con nombre y código institucional.</mat-card-subtitle>
+          <mat-card-title>{{ editandoGrupo() ? 'Editar grupo' : 'Nuevo grupo' }}</mat-card-title>
+          <mat-card-subtitle>
+            {{ editandoGrupo() ? 'Actualiza el nombre o el código de la cohorte.' : 'Crea una cohorte con nombre y código institucional.' }}
+          </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <form [formGroup]="form" (ngSubmit)="crear()">
+          <form [formGroup]="form" (ngSubmit)="editandoGrupo() ? actualizarGrupo() : crear()">
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Nombre del grupo</mat-label>
               <input matInput formControlName="nombre">
@@ -87,9 +89,14 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
               <mat-label>Código único</mat-label>
               <input matInput formControlName="codigo">
             </mat-form-field>
-            <button class="psy-button psy-button--primary" type="submit" [disabled]="form.invalid || saving()">
-              {{ saving() ? 'Creando…' : 'Crear grupo' }}
-            </button>
+            <div class="form-actions">
+              <button class="psy-button psy-button--primary" type="submit" [disabled]="form.invalid || saving()">
+                {{ saving() ? 'Guardando…' : (editandoGrupo() ? 'Guardar cambios' : 'Crear grupo') }}
+              </button>
+              @if (editandoGrupo()) {
+                <button class="psy-button psy-button--ghost" type="button" (click)="cancelarEdicion()">Cancelar</button>
+              }
+            </div>
           </form>
         </mat-card-content>
       </mat-card>
@@ -144,6 +151,14 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
                     <button type="button" class="text-action" (click)="copiarCodigo(g)">
                       <mat-icon aria-hidden="true">content_copy</mat-icon>
                       Copiar código
+                    </button>
+                    <button type="button" class="text-action" (click)="editarGrupo(g)">
+                      <mat-icon aria-hidden="true">edit</mat-icon>
+                      Editar
+                    </button>
+                    <button type="button" class="text-action text-action--danger" (click)="eliminarGrupo(g)">
+                      <mat-icon aria-hidden="true">delete</mat-icon>
+                      Borrar
                     </button>
                   </div>
                 </article>
@@ -246,6 +261,10 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
                         <strong>{{ student.nombre }} {{ student.apellido }}</strong>
                         <span>{{ student.email }}</span>
                       </div>
+                      <button mat-icon-button type="button" aria-label="Quitar estudiante del grupo"
+                        (click)="quitarEstudiante(grupo, student)">
+                        <mat-icon>person_remove</mat-icon>
+                      </button>
                     </div>
                   }
                 </div>
@@ -440,6 +459,9 @@ import { SimulationCaseSummary } from '../../core/models/simulation.model';
       cursor: pointer;
     }
     .text-action mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .text-action--danger { background: rgba(143, 47, 61, .1); color: #8f2f3d; }
+    .form-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .detalle-row > button { margin-left: auto; flex: 0 0 auto; color: var(--psy-blue-deep); }
     .grupo-detalle { margin-top: 16px; border-radius: 18px; border: 1px solid rgba(0, 72, 118, .12); box-shadow: 0 18px 38px rgba(10, 38, 70, .06); }
     .grupo-detalle mat-card-title { color: var(--psy-ink); font-size: 1.25rem; font-weight: 900; }
     .grupo-detalle mat-card-subtitle { color: var(--psy-muted); font-weight: 750; }
@@ -563,6 +585,7 @@ export class GrupoListComponent implements OnInit {
   grupos = signal<Grupo[]>([]);
   grupoActivo = signal<Grupo | null>(null);
   grupoSeleccionado = signal<number | null>(null);
+  editandoGrupo = signal<Grupo | null>(null);
   estudiantes = signal<GrupoEstudiante[]>([]);
   busquedaGrupo = signal('');
   busquedaEstudiante = signal('');
@@ -654,6 +677,69 @@ export class GrupoListComponent implements OnInit {
       error: () => {
         this.error.set('No fue posible crear el grupo.');
         this.saving.set(false);
+      }
+    });
+  }
+
+  editarGrupo(grupo: Grupo) {
+    this.editandoGrupo.set(grupo);
+    this.form.setValue({ nombre: grupo.nombre, codigo: grupo.codigo });
+    this.error.set('');
+  }
+
+  cancelarEdicion() {
+    this.editandoGrupo.set(null);
+    this.form.reset();
+  }
+
+  actualizarGrupo() {
+    const grupo = this.editandoGrupo();
+    if (!grupo || this.form.invalid || this.saving()) return;
+    const { nombre, codigo } = this.form.value;
+    this.saving.set(true);
+    this.error.set('');
+    this.grupoService.actualizar(grupo.id, { nombre: nombre!, codigo: codigo! }).subscribe({
+      next: actualizado => {
+        this.grupos.update(list => list.map(g => g.id === actualizado.id ? actualizado : g));
+        if (this.grupoActivo()?.id === actualizado.id) this.grupoActivo.set(actualizado);
+        this.cancelarEdicion();
+        this.saving.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.error.set(err.error?.message || 'No fue posible actualizar el grupo.');
+        this.saving.set(false);
+      }
+    });
+  }
+
+  eliminarGrupo(grupo: Grupo) {
+    if (!confirm(`¿Borrar el grupo "${grupo.nombre}"? Se quitarán sus estudiantes y casos asignados. Esta acción no se puede deshacer.`)) return;
+    this.error.set('');
+    this.grupoService.eliminar(grupo.id).subscribe({
+      next: () => {
+        this.grupos.update(list => list.filter(g => g.id !== grupo.id));
+        if (this.grupoActivo()?.id === grupo.id) this.grupoActivo.set(null);
+        if (this.editandoGrupo()?.id === grupo.id) this.cancelarEdicion();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.error.set(err.error?.message || 'No fue posible borrar el grupo.');
+      }
+    });
+  }
+
+  quitarEstudiante(grupo: Grupo, student: GrupoEstudiante) {
+    if (!confirm(`¿Quitar a ${student.nombre} ${student.apellido} del grupo?`)) return;
+    this.grupoService.quitarEstudiante(grupo.id, student.id).subscribe({
+      next: actualizado => {
+        this.estudiantes.update(list => list.filter(s => s.id !== student.id));
+        this.grupos.update(list => list.map(g => g.id === actualizado.id ? actualizado : g));
+        if (this.grupoActivo()?.id === actualizado.id) this.grupoActivo.set(actualizado);
+        this.mensajeEstudiante.set('Estudiante retirado del grupo.');
+        this.mensajeEsError.set(false);
+      },
+      error: () => {
+        this.mensajeEstudiante.set('No fue posible quitar al estudiante.');
+        this.mensajeEsError.set(true);
       }
     });
   }

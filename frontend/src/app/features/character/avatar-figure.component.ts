@@ -1,6 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AvatarConfig } from './avatar.model';
+import { AvatarConfig, EXPRESSIONS, Expression, LEGACY_MOUTH_TO_EXPRESSION } from './avatar.model';
 import { bodyAssetName, hairVariantId } from './avatar-config.util';
 
 export type AvatarPreviewPose = 'front' | 'side';
@@ -26,10 +26,13 @@ function layer(key: string, kind: AvatarLayerKind, assetPath: string, zIndex: nu
   };
 }
 
-function faceId(config: AvatarConfig): 'neutral' | 'calm' | 'worried' {
-  if (config.mouth === 'sonrisa') return 'calm';
-  if (config.mouth === 'seria') return 'worried';
-  return 'neutral';
+const EXPRESSION_IDS = new Set<string>(EXPRESSIONS.map(e => e.id));
+
+/** Resuelve el id de expresión (hoja face_{id}.png) a partir del campo `mouth`. */
+function faceId(config: AvatarConfig): Expression {
+  const raw = config.mouth;
+  if (EXPRESSION_IDS.has(raw)) return raw as Expression;
+  return LEGACY_MOUTH_TO_EXPRESSION[raw] ?? 'neutral';
 }
 
 export function avatarFramePosition(pose: AvatarPreviewPose): string {
@@ -74,6 +77,7 @@ export function resolveAvatarSpriteLayers(config: AvatarConfig, pose: AvatarPrev
   imports: [CommonModule],
   template: `
     <div class="avatar-pixel" [class.avatar-pixel--portrait]="portrait()" role="img"
+      [style.transform]="flipX() ? 'scaleX(-1)' : null"
       [attr.aria-label]="'Avatar pixel art'">
       <span class="avatar-shadow" aria-hidden="true"></span>
       @for (layer of layers(); track layer.key) {
@@ -145,6 +149,8 @@ export class AvatarFigureComponent {
   readonly config = input.required<AvatarConfig>();
   readonly pose = input<AvatarPreviewPose>('front');
   readonly portrait = input(false);
+  /** Espeja horizontalmente (lateral mirando a la izquierda). */
+  readonly flipX = input(false);
 
   readonly layers = computed(() => resolveAvatarSpriteLayers(this.config(), this.pose()));
   readonly framePosition = computed(() => avatarFramePosition(this.pose()));

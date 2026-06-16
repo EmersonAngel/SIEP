@@ -505,6 +505,46 @@ def crear(nombre, codigo, profesor):
 
 
 @transaction.atomic
+def actualizar(grupo_id, nombre, codigo, profesor):
+    grupo = _require_grupo(grupo_id, profesor)
+    if nombre is not None:
+        nombre = str(nombre).strip()
+        if not nombre:
+            raise ValidationError("El nombre del grupo es obligatorio")
+        grupo.nombre = nombre
+    if codigo is not None:
+        codigo = str(codigo).strip()
+        if not codigo:
+            raise ValidationError("El código del grupo es obligatorio")
+        if Grupo.objects.filter(codigo=codigo).exclude(pk=grupo.id).exists():
+            raise ValidationError(f"Ya existe un grupo con el código: {codigo}")
+        grupo.codigo = codigo
+    grupo.save(update_fields=["nombre", "codigo"])
+    return grupo_dto(grupo)
+
+
+@transaction.atomic
+def eliminar(grupo_id, profesor):
+    grupo = _require_grupo(grupo_id, profesor)
+    with connection.cursor() as cur:
+        cur.execute("DELETE FROM grupo_case_version WHERE grupo_id = %s", [grupo.id])
+        cur.execute("DELETE FROM grupo_estudiante WHERE grupo_id = %s", [grupo.id])
+    grupo.delete()
+    return {"id": grupo_id}
+
+
+@transaction.atomic
+def quitar_estudiante(grupo_id, estudiante_id, profesor):
+    grupo = _require_grupo(grupo_id, profesor)
+    with connection.cursor() as cur:
+        cur.execute(
+            "DELETE FROM grupo_estudiante WHERE grupo_id = %s AND estudiante_id = %s",
+            [grupo.id, estudiante_id],
+        )
+    return grupo_dto(grupo)
+
+
+@transaction.atomic
 def agregar_estudiante(grupo_id, email, profesor):
     grupo = _require_grupo(grupo_id, profesor)
     estudiante = User.objects.filter(email=email).first()

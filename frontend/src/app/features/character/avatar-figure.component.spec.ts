@@ -34,9 +34,15 @@ describe('AvatarFigureComponent pixel layers', () => {
     expect(layers[1].assetPath).toBe('/assets/characters/modular/body/body_male_blue.png');
   });
 
-  it('maps existing mouth options to available face expressions', () => {
-    expect(resolveAvatarSpriteLayers({ ...defaultAvatar(), mouth: 'sonrisa' })[2].key).toBe('face-calm');
+  it('mapea valores antiguos de mouth a las nuevas expresiones', () => {
+    expect(resolveAvatarSpriteLayers({ ...defaultAvatar(), mouth: 'sonrisa' })[2].key).toBe('face-happy');
     expect(resolveAvatarSpriteLayers({ ...defaultAvatar(), mouth: 'seria' })[2].key).toBe('face-worried');
+  });
+
+  it('usa directamente los ids de expresión nuevos', () => {
+    expect(resolveAvatarSpriteLayers({ ...defaultAvatar(), mouth: 'angry' })[2].assetPath)
+      .toBe('/assets/characters/modular/face/face_angry.png');
+    expect(resolveAvatarSpriteLayers({ ...defaultAvatar(), mouth: 'surprised' })[2].key).toBe('face-surprised');
   });
 
   it('omits hair layers when the user chooses no hair', () => {

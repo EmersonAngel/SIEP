@@ -6,6 +6,16 @@ class CrearGrupoSerializer(serializers.Serializer):
     codigo = serializers.CharField()
 
 
+class ActualizarGrupoSerializer(serializers.Serializer):
+    nombre = serializers.CharField(required=False)
+    codigo = serializers.CharField(required=False)
+
+    def validate(self, attrs):
+        if "nombre" not in attrs and "codigo" not in attrs:
+            raise serializers.ValidationError("Envía nombre o código para actualizar")
+        return attrs
+
+
 class AgregarEstudianteSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

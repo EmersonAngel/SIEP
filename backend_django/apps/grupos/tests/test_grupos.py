@@ -311,6 +311,62 @@ def test_add_student_missing_group_404(profesor, estudiante):
     assert resp.status_code == 404
 
 
+def test_update_grupo_renames(profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "UPD1"}, format="json").data["data"]
+    resp = cl(profesor).put(f"/api/grupos/{grupo['id']}", {"nombre": "Nuevo", "codigo": "UPD1B"}, format="json")
+    assert resp.status_code == 200
+    assert resp.data["message"] == "Grupo actualizado"
+    assert resp.data["data"]["nombre"] == "Nuevo"
+    assert resp.data["data"]["codigo"] == "UPD1B"
+
+
+def test_update_grupo_duplicate_codigo_400(profesor):
+    cl(profesor).post("/api/grupos", {"nombre": "A", "codigo": "DUPX"}, format="json")
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "B", "codigo": "DUPY"}, format="json").data["data"]
+    resp = cl(profesor).put(f"/api/grupos/{grupo['id']}", {"codigo": "DUPX"}, format="json")
+    assert resp.status_code == 400
+    assert "Ya existe un grupo" in resp.data["message"]
+
+
+def test_update_foreign_group_400(profesor, otro_profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "UPDF"}, format="json").data["data"]
+    resp = cl(otro_profesor).put(f"/api/grupos/{grupo['id']}", {"nombre": "X"}, format="json")
+    assert resp.status_code == 400
+    assert resp.data["message"] == "No tiene permiso sobre este grupo"
+
+
+def test_delete_grupo_removes_it(profesor, estudiante):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "DEL1"}, format="json").data["data"]
+    cl(profesor).post(f"/api/grupos/{grupo['id']}/estudiantes", {"email": estudiante.email}, format="json")
+    resp = cl(profesor).delete(f"/api/grupos/{grupo['id']}")
+    assert resp.status_code == 200
+    assert resp.data["message"] == "Grupo eliminado"
+    codigos = {g["codigo"] for g in cl(profesor).get("/api/grupos").data["data"]}
+    assert "DEL1" not in codigos
+    # El código queda libre para reusarse.
+    again = cl(profesor).post("/api/grupos", {"nombre": "G2", "codigo": "DEL1"}, format="json")
+    assert again.status_code == 201
+
+
+def test_delete_foreign_group_400(profesor, otro_profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "DELF"}, format="json").data["data"]
+    resp = cl(otro_profesor).delete(f"/api/grupos/{grupo['id']}")
+    assert resp.status_code == 400
+
+
+def test_delete_grupo_forbidden_for_estudiante(estudiante):
+    assert cl(estudiante).delete("/api/grupos/1").status_code == 403
+
+
+def test_remove_student_from_group(profesor, estudiante):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "RMV1"}, format="json").data["data"]
+    cl(profesor).post(f"/api/grupos/{grupo['id']}/estudiantes", {"email": estudiante.email}, format="json")
+    resp = cl(profesor).delete(f"/api/grupos/{grupo['id']}/estudiantes/{estudiante.id}")
+    assert resp.status_code == 200
+    assert resp.data["message"] == "Estudiante retirado"
+    assert resp.data["data"]["totalEstudiantes"] == 0
+
+
 def test_list_only_own_groups(profesor, otro_profesor):
     cl(profesor).post("/api/grupos", {"nombre": "Mio", "codigo": "OWN1"}, format="json")
     cl(otro_profesor).post("/api/grupos", {"nombre": "Suyo", "codigo": "OTH1"}, format="json")

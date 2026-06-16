@@ -73,7 +73,7 @@ import {
 import { coerceAvatar, defaultAvatar, hairVariantPatch, parseAvatar } from '../character/avatar-config.util';
 import { AVATAR_STORAGE_KEY } from '../character/avatar.store';
 import { NpcAvatarPresetKey, NpcMotionConfig, NpcMovementZone } from '../../core/models/simulation.model';
-import { AvatarConfig, CLOTHING_COLORS, GENDER_OPTIONS } from '../character/avatar.model';
+import { AvatarConfig, CLOTHING_COLORS, EXPRESSIONS, GENDER_OPTIONS } from '../character/avatar.model';
 import { AUTHORING_HAIR_VARIANTS, AUTHORING_NPC_TEMPLATES } from './authoring-catalog.config';
 
 interface WorldCallbacks {
@@ -214,10 +214,14 @@ class DataDrivenWorldScene extends Phaser.Scene {
       }
     }
     for (const hair of AUTHORING_HAIR_VARIANTS) {
-      for (const mouth of ['neutra', 'sonrisa', 'seria']) {
-        for (const spec of avatarLayerSpecs({ ...defaultAvatar(), ...hairVariantPatch(hair.id), mouth })) {
-          this.load.image(spec.textureKey, spec.assetPath);
-        }
+      for (const spec of avatarLayerSpecs({ ...defaultAvatar(), ...hairVariantPatch(hair.id) })) {
+        this.load.image(spec.textureKey, spec.assetPath);
+      }
+    }
+    // Todas las hojas de expresión (cualquier avatar/NPC puede usar cualquiera).
+    for (const expr of EXPRESSIONS) {
+      for (const spec of avatarLayerSpecs({ ...defaultAvatar(), mouth: expr.id })) {
+        this.load.image(spec.textureKey, spec.assetPath);
       }
     }
     for (const gender of GENDER_OPTIONS) {

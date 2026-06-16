@@ -14,6 +14,7 @@ import {
   HairColor,
   HairStyle,
   HairVariantId,
+  LEGACY_MOUTH_TO_EXPRESSION,
   MOUTHS,
   SKIN_TONES,
   Uniform,
@@ -62,7 +63,7 @@ export function defaultAvatar(): AvatarConfig {
     fringe: false,
     eyes: 'neutros',
     brows: 'rectas',
-    mouth: 'neutra',
+    mouth: 'neutral',
     accessory: 'ninguno',
     uniform: 'sin-bata',
   };
@@ -90,6 +91,10 @@ export function coerceAvatar(x: unknown): AvatarConfig {
   const pick = <T extends string>(list: readonly { id: T }[], v: unknown, fb: T): T =>
     has(list, v) ? v as T : fb;
   const uni: Uniform = (a['uniform'] === 'con-bata' || a['uniform'] === 'sin-bata') ? a['uniform'] : d.uniform;
+  const rawMouth = a['mouth'];
+  const mouth = (typeof rawMouth === 'string' && LEGACY_MOUTH_TO_EXPRESSION[rawMouth])
+    ? LEGACY_MOUTH_TO_EXPRESSION[rawMouth]
+    : pick(MOUTHS, rawMouth, d.mouth);
 
   return {
     gender: pick(GENDER_OPTIONS, a['gender'], d.gender),
@@ -100,7 +105,7 @@ export function coerceAvatar(x: unknown): AvatarConfig {
     fringe: typeof a['fringe'] === 'boolean' ? a['fringe'] : d.fringe,
     eyes: pick(EYES, a['eyes'], d.eyes),
     brows: pick(BROWS, a['brows'], d.brows),
-    mouth: pick(MOUTHS, a['mouth'], d.mouth),
+    mouth,
     accessory: pick(ACCESSORIES, a['accessory'], d.accessory),
     uniform: uni,
   };

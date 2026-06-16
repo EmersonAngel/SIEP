@@ -5,6 +5,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.grupos.views import (
     GrupoCasoDetailView,
     GrupoCasosView,
+    GrupoDetailView,
+    GrupoEstudianteDetailView,
     GrupoEstudiantesImportView,
     GrupoEstudiantesImportSpecView,
     GrupoEstudiantesImportTemplateView,
@@ -23,7 +25,9 @@ from apps.simulation.views.authoring_views import AdminCaseListCreateView
 urlpatterns = [
     path("api/auth/", include("apps.users.urls")),
     path("api/grupos", GrupoListCreateView.as_view()),
+    path("api/grupos/<int:pk>", GrupoDetailView.as_view()),
     path("api/grupos/<int:pk>/estudiantes", GrupoEstudiantesView.as_view()),
+    path("api/grupos/<int:pk>/estudiantes/<int:estudiante_id>", GrupoEstudianteDetailView.as_view()),
     path("api/grupos/<int:pk>/estudiantes/import", GrupoEstudiantesImportView.as_view()),
     path("api/grupos/<int:pk>/estudiantes/import/", GrupoEstudiantesImportView.as_view()),
     path("api/grupos/estudiantes/import/spec", GrupoEstudiantesImportSpecView.as_view()),

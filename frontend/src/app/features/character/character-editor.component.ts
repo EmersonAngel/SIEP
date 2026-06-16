@@ -93,12 +93,14 @@ import { NotificationService } from '../../core/notifications/notification.servi
 
         <section class="ce-stage glass" aria-label="Vista previa del avatar">
           <div class="ce-halo"></div>
-          <app-avatar-figure class="ce-figure" [config]="avatar()" [pose]="pose()" />
+          <app-avatar-figure class="ce-figure" [config]="avatar()" [pose]="pose()" [flipX]="flipX()" />
           <div class="ce-pose" role="radiogroup" aria-label="Pose">
-            <button type="button" class="ce-opt" [class.sel]="pose() === 'front'"
-              role="radio" [attr.aria-checked]="pose() === 'front'" (click)="pose.set('front')">Frontal</button>
-            <button type="button" class="ce-opt" [class.sel]="pose() === 'side'"
-              role="radio" [attr.aria-checked]="pose() === 'side'" (click)="pose.set('side')">Lateral</button>
+            <button type="button" class="ce-opt" [class.sel]="view() === 'front'"
+              role="radio" [attr.aria-checked]="view() === 'front'" (click)="view.set('front')">Frontal</button>
+            <button type="button" class="ce-opt" [class.sel]="view() === 'left'"
+              role="radio" [attr.aria-checked]="view() === 'left'" (click)="view.set('left')">Lateral izq.</button>
+            <button type="button" class="ce-opt" [class.sel]="view() === 'right'"
+              role="radio" [attr.aria-checked]="view() === 'right'" (click)="view.set('right')">Lateral der.</button>
           </div>
           <p class="sr-only">{{ avatarSummary() }}</p>
         </section>
@@ -198,7 +200,9 @@ export class CharacterEditorComponent {
   private readonly notify = inject(NotificationService);
 
   readonly avatar = this.store.avatar;
-  readonly pose = signal<'front' | 'side'>('front');
+  readonly view = signal<'front' | 'left' | 'right'>('front');
+  readonly pose = computed<'front' | 'side'>(() => this.view() === 'front' ? 'front' : 'side');
+  readonly flipX = computed(() => this.view() === 'left');
 
   readonly genderOptions = GENDER_OPTIONS;
   readonly clothingColors = CLOTHING_COLORS;

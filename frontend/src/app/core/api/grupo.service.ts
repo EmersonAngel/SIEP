@@ -65,6 +65,19 @@ export class GrupoService {
     return this.http.post<ApiResponse<Grupo>>(this.API, { nombre, codigo }).pipe(map(r => r.data));
   }
 
+  actualizar(grupoId: number, cambios: { nombre?: string; codigo?: string }) {
+    return this.http.put<ApiResponse<Grupo>>(`${this.API}/${grupoId}`, cambios).pipe(map(r => r.data));
+  }
+
+  eliminar(grupoId: number) {
+    return this.http.delete<ApiResponse<{ id: number }>>(`${this.API}/${grupoId}`).pipe(map(r => r.data));
+  }
+
+  quitarEstudiante(grupoId: number, estudianteId: number) {
+    return this.http.delete<ApiResponse<Grupo>>(`${this.API}/${grupoId}/estudiantes/${estudianteId}`)
+      .pipe(map(r => r.data));
+  }
+
   agregarEstudiante(grupoId: number, email: string) {
     return this.http.post<ApiResponse<Grupo>>(`${this.API}/${grupoId}/estudiantes`, { email })
       .pipe(map(r => r.data));

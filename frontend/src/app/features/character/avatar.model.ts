@@ -96,11 +96,40 @@ export const BROWS: readonly Option[] = [
   { id: 'marcadas', label: 'Marcadas' },
 ];
 
-export const MOUTHS: readonly Option[] = [
-  { id: 'neutra', label: 'Neutra' },
-  { id: 'sonrisa', label: 'Calma' },
-  { id: 'seria', label: 'Preocupada' },
+/**
+ * Expresiones faciales disponibles. Cada id corresponde a una hoja
+ * `face/face_{id}.png` (frente + lateral) derivada de `expresiones.png`.
+ * El campo `mouth` del AvatarConfig guarda uno de estos ids (se conserva el
+ * nombre del campo por compatibilidad con datos previos; ver coerceAvatar).
+ */
+export type Expression =
+  | 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'worried'
+  | 'sleepy' | 'wink' | 'crying' | 'embarrassed' | 'laughing' | 'confused';
+
+export const EXPRESSIONS: readonly { id: Expression; label: string }[] = [
+  { id: 'neutral', label: 'Neutral' },
+  { id: 'happy', label: 'Feliz' },
+  { id: 'sad', label: 'Triste' },
+  { id: 'angry', label: 'Enojo' },
+  { id: 'surprised', label: 'Sorpresa' },
+  { id: 'worried', label: 'Preocupada' },
+  { id: 'sleepy', label: 'Cansada' },
+  { id: 'wink', label: 'Guiño' },
+  { id: 'crying', label: 'Llanto' },
+  { id: 'embarrassed', label: 'Pena' },
+  { id: 'laughing', label: 'Risa' },
+  { id: 'confused', label: 'Confusión' },
 ];
+
+/** Mapeo de valores antiguos del campo `mouth` a expresiones nuevas. */
+export const LEGACY_MOUTH_TO_EXPRESSION: Record<string, Expression> = {
+  neutra: 'neutral',
+  sonrisa: 'happy',
+  seria: 'worried',
+};
+
+/** Alias retrocompatible: la UI de "Expresión" se alimenta de esta lista. */
+export const MOUTHS = EXPRESSIONS;
 
 export const ACCESSORIES: readonly Option[] = [
   { id: 'ninguno', label: 'Ninguno' },
