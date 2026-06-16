@@ -8,9 +8,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from shared.permissions import IsAdmin
-from shared.response import api_ok
+from shared.response import api_created, api_ok
 
 from .serializers import (
+    AccessRequestCreateSerializer,
+    AccessRequestSerializer,
+    AccessRequestStatusSerializer,
     AdminUserStatusSerializer,
     AdminUserSerializer,
     AdminUserWriteSerializer,
@@ -21,6 +24,7 @@ from .serializers import (
     generate_access_token,
     normalize_email_value,
 )
+from .services import access_request_service
 
 User = get_user_model()
 
@@ -122,6 +126,49 @@ class RegisterView(APIView):
         return api_ok(UserSummarySerializer(user).data, message="Usuario creado exitosamente")
 
 
+class AccessRequestCreateView(APIView):
+    """POST /api/auth/access-request — public student access request."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        ser = AccessRequestCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        created = access_request_service.create_access_request(**ser.validated_data)
+        return api_created(
+            AccessRequestSerializer(created).data,
+            message="Solicitud enviada. El administrador revisará tu acceso pronto.",
+        )
+
+
+class AdminAccessRequestListView(APIView):
+    """GET /api/admin/access-requests — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        status = request.query_params.get("status")
+        requests = access_request_service.list_access_requests(status=status)
+        return api_ok(AccessRequestSerializer(requests, many=True).data)
+
+
+class AdminAccessRequestStatusView(APIView):
+    """PATCH /api/admin/access-requests/<id>/status — ADMIN only."""
+
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, request_id):
+        ser = AccessRequestStatusSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        updated = access_request_service.update_access_request_status(
+            request_id, status=ser.validated_data["status"]
+        )
+        return api_ok(
+            AccessRequestSerializer(updated).data,
+            message="Estado de solicitud actualizado.",
+        )
+
+
 class MeView(APIView):
     """GET /api/auth/me — authenticated."""
 
@@ -144,6 +191,7 @@ class AdminUserListCreateView(APIView):
         ser = AdminUserWriteSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
+        access_request_service.resolve_pending_for_email(user.email)
         return api_ok(AdminUserSerializer(user).data, message="Usuario creado correctamente")
 
 

@@ -21,7 +21,7 @@ from apps.simulation.views.game_views import (
     WorldView,
 )
 
-# Mounted at "api/simulation".
+# Mounted at "api/simulation/".
 urlpatterns = [
     path("catalog", CatalogView.as_view()),
     path("cases", CasesView.as_view()),

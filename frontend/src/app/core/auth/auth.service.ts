@@ -43,6 +43,10 @@ export class AuthService {
       }));
   }
 
+  requestAccess(payload: { nombre: string; apellido: string; email: string }) {
+    return this.http.post<ApiResponse<{ id: number }>>(`${this.API}/access-request`, payload);
+  }
+
   saveSession(token: string, user: User): void {
     if (!token || this.isTokenExpired(token)) {
       this.clearSession();

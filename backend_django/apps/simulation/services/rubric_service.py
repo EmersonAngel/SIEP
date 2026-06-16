@@ -76,6 +76,20 @@ def _weight(criterion):
     return Decimal(criterion.weight or criterion.max_score or 0)
 
 
+def _normalize_criteria_weights(criteria):
+    total = sum((_weight(c) for c in criteria), Decimal("0"))
+    if total == Decimal("100.00") or not criteria:
+        return criteria
+    each = (Decimal("100") / len(criteria)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    rubric_id = criteria[0].rubric_id
+    for index, criterion in enumerate(criteria):
+        weight = each
+        if index == 0:
+            weight += Decimal("100.00") - (each * len(criteria))
+        RubricCriterion.objects.filter(pk=criterion.id).update(weight=weight)
+    return list(_criteria_qs(Rubric.objects.get(pk=rubric_id)))
+
+
 def _validate_weights(criteria):
     if not criteria:
         raise ValidationError("La rubrica debe tener al menos un criterio activo")
@@ -390,7 +404,7 @@ def save_attempt_evaluation(attempt_id, data, instructor):
     if not attempt:
         raise NotFound("Intento no encontrado")
     rubric = rubric_for_case_version(attempt.case_version_id)
-    criteria = list(_criteria_qs(rubric))
+    criteria = _normalize_criteria_weights(list(_criteria_qs(rubric)))
     _validate_weights(criteria)
 
     raw_scores = data.get("scores") or data.get("items") or []

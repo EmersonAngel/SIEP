@@ -18,13 +18,14 @@ def cl(user):
     return c
 
 
-def assign_case_to_student(estudiante, case_version_id, codigo="INST-G"):
+def assign_case_to_student(estudiante, case_version_id, codigo="INST-G", profesor=None):
     """Da acceso al estudiante: grupo activo con el caso asignado (requerido por
     la regla de acceso de start_attempt)."""
-    profesor = User.objects.create_user(
-        email=f"prof_{codigo.lower()}@x.com", password="x",
-        nombre="Pro", apellido="Asig", role="PROFESOR",
-    )
+    if profesor is None:
+        profesor = User.objects.create_user(
+            email=f"prof_{codigo.lower()}@x.com", password="x",
+            nombre="Pro", apellido="Asig", role="PROFESOR",
+        )
     grupo = Grupo.objects.create(nombre=f"Grupo {codigo}", codigo=codigo, profesor=profesor)
     with connection.cursor() as cur:
         cur.execute(
@@ -57,8 +58,15 @@ def case_version_id(db):
     return CaseVersion.objects.get(simulation_case__code="SIM-VBG-001", status="PUBLISHED").id
 
 
-def _play_one_decision(estudiante, case_version_id, codigo="INST"):
-    assign_case_to_student(estudiante, case_version_id, codigo)
+@pytest.fixture
+def otro_profesor(db):
+    return User.objects.create_user(
+        email="prof_otro@x.com", password="x", nombre="Otro", apellido="Pro", role="PROFESOR"
+    )
+
+
+def _play_one_decision(estudiante, case_version_id, codigo="INST", profesor=None):
+    assign_case_to_student(estudiante, case_version_id, codigo, profesor=profesor)
     client = cl(estudiante)
     start = client.post(
         "/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json"
@@ -86,7 +94,7 @@ def test_recent_forbidden_for_estudiante(estudiante):
 
 
 def test_recent_attempts_lists(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-REC")
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-REC", profesor=profesor)
     resp = cl(profesor).get("/api/instructor/attempts/recent")
     assert resp.status_code == 200
     ids = [a["attemptId"] for a in resp.data["data"]]
@@ -98,7 +106,7 @@ def test_recent_attempts_lists(estudiante, profesor, case_version_id):
 
 # --- trace -----------------------------------------------------------------
 def test_trace_has_events_world_and_decrypted_reflection(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-TRACE")
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-TRACE", profesor=profesor)
     resp = cl(profesor).get(f"/api/instructor/attempts/{attempt_id}/trace")
     assert resp.status_code == 200
     trace = resp.data["data"]
@@ -108,6 +116,13 @@ def test_trace_has_events_world_and_decrypted_reflection(estudiante, profesor, c
     assert trace["world"] is not None and trace["world"]["map"] is not None
     assert any(r["text"] == "Mi nota clínica" for r in trace["reflections"])  # decrypted
     assert isinstance(trace["rubricEvaluations"], list)
+    assert trace["totalDurationSeconds"] is not None
+    assert len(trace["timeline"]) >= 1
+
+
+def test_trace_foreign_professor_forbidden(estudiante, profesor, otro_profesor, case_version_id):
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-FOR", profesor=profesor)
+    assert cl(otro_profesor).get(f"/api/instructor/attempts/{attempt_id}/trace").status_code == 403
 
 
 def test_trace_missing_attempt_404(profesor):
@@ -118,7 +133,7 @@ def test_trace_missing_attempt_404(profesor):
 
 # --- rubric evaluation -----------------------------------------------------
 def test_rubric_get_returns_criteria(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBGET")
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBGET", profesor=profesor)
     resp = cl(profesor).get(f"/api/instructor/attempts/{attempt_id}/rubric-evaluation")
     assert resp.status_code == 200
     view = resp.data["data"]
@@ -129,7 +144,7 @@ def test_rubric_get_returns_criteria(estudiante, profesor, case_version_id):
 
 
 def test_save_rubric_evaluation(estudiante, profesor, case_version_id):
-    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBSAVE")
+    attempt_id = _play_one_decision(estudiante, case_version_id, "INST-RUBSAVE", profesor=profesor)
     p = cl(profesor)
     view = p.get(f"/api/instructor/attempts/{attempt_id}/rubric-evaluation").data["data"]
     rubric_id = view["rubricId"]

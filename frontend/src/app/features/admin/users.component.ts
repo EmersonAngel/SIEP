@@ -11,6 +11,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { AdminUser, UserAdminService, UserRole } from '../../core/api/user-admin.service';
+import { AccessRequest, AccessRequestAdminService } from '../../core/api/access-request-admin.service';
 import { ConfirmDialogComponent } from '../../shared/confirm/confirm-dialog.component';
 
 @Component({
@@ -52,6 +53,37 @@ import { ConfirmDialogComponent } from '../../shared/confirm/confirm-dialog.comp
       }
       @if (error()) {
         <p class="state-message state-message--error" role="alert">{{ error() }}</p>
+      }
+
+      @if (accessRequests().length) {
+        <mat-card class="requests-card">
+          <mat-card-header>
+            <mat-card-title>Solicitudes de acceso pendientes</mat-card-title>
+            <mat-card-subtitle>Estudiantes que pidieron cuenta desde el login</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="requests-list">
+              @for (request of accessRequests(); track request.id) {
+                <article class="request-item">
+                  <div>
+                    <strong>{{ request.nombre }} {{ request.apellido }}</strong>
+                    <span>{{ request.email }}</span>
+                    <small>Solicitado: {{ formatDate(request.createdAt) }}</small>
+                  </div>
+                  <div class="request-actions">
+                    <button class="psy-button psy-button--primary" type="button" (click)="attendRequest(request)">
+                      <mat-icon>person_add</mat-icon>
+                      Crear usuario
+                    </button>
+                    <button class="psy-button psy-button--ghost" type="button" (click)="dismissRequest(request)" [disabled]="saving()">
+                      Descartar
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          </mat-card-content>
+        </mat-card>
       }
 
       <div class="admin-grid">
@@ -180,6 +212,25 @@ import { ConfirmDialogComponent } from '../../shared/confirm/confirm-dialog.comp
     .state-message { margin: 0; padding: 12px 14px; border-radius: 12px; color: var(--psy-green-deep); background: rgba(66, 141, 101, .1); font-weight: 700; }
     .state-message--error { color: #8f2f3d; background: rgba(143, 47, 61, .1); }
     .empty-state { margin: 16px 0 0; color: var(--psy-muted); font-weight: 700; }
+    .requests-card { border: 1px solid rgba(79, 124, 172, .18); }
+    .requests-list { display: grid; gap: 12px; }
+    .request-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(79, 124, 172, .06);
+      border: 1px solid rgba(79, 124, 172, .14);
+    }
+    .request-item strong,
+    .request-item span,
+    .request-item small { display: block; }
+    .request-item span { color: var(--psy-muted); font-weight: 700; font-size: .9rem; }
+    .request-item small { margin-top: 4px; color: var(--psy-muted); font-size: .78rem; }
+    .request-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     @media (max-width: 920px) {
       .admin-grid { grid-template-columns: 1fr; }
       .page-header { display: grid; }
@@ -189,11 +240,13 @@ import { ConfirmDialogComponent } from '../../shared/confirm/confirm-dialog.comp
 })
 export class UsersComponent implements OnInit {
   private readonly service = inject(UserAdminService);
+  private readonly accessRequestsService = inject(AccessRequestAdminService);
   private readonly fb = inject(FormBuilder);
 
   readonly roles: UserRole[] = ['ADMIN', 'PROFESOR', 'ESTUDIANTE'];
   readonly cols = ['nombre', 'email', 'role', 'activo', 'acciones'];
   readonly users = signal<AdminUser[]>([]);
+  readonly accessRequests = signal<AccessRequest[]>([]);
   readonly selectedUser = signal<AdminUser | null>(null);
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -219,6 +272,55 @@ export class UsersComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.loadAccessRequests();
+  }
+
+  loadAccessRequests() {
+    this.accessRequestsService.listPending().subscribe({
+      next: requests => this.accessRequests.set(requests),
+      error: () => this.accessRequests.set([]),
+    });
+  }
+
+  attendRequest(request: AccessRequest) {
+    this.selectedUser.set(null);
+    this.form.reset({
+      nombre: request.nombre,
+      apellido: request.apellido,
+      email: request.email,
+      role: 'ESTUDIANTE',
+      password: '',
+    });
+    this.message.set(`Solicitud de ${request.nombre} ${request.apellido} lista para crear usuario.`);
+    this.error.set('');
+  }
+
+  dismissRequest(request: AccessRequest) {
+    if (this.saving()) return;
+    this.saving.set(true);
+    this.accessRequestsService.updateStatus(request.id, 'DISMISSED').subscribe({
+      next: () => {
+        this.accessRequests.update(items => items.filter(item => item.id !== request.id));
+        this.message.set('Solicitud descartada.');
+        this.saving.set(false);
+      },
+      error: error => {
+        this.error.set(error?.error?.message || 'No fue posible actualizar la solicitud.');
+        this.saving.set(false);
+      },
+    });
+  }
+
+  formatDate(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   load() {
@@ -312,6 +414,7 @@ export class UsersComponent implements OnInit {
         this.message.set(selected ? 'La información se guardó correctamente.' : 'Usuario creado correctamente.');
         this.saving.set(false);
         this.editUser(saved);
+        this.loadAccessRequests();
       },
       error: error => {
         this.error.set(error?.error?.message || 'No fue posible guardar los cambios.');

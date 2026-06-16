@@ -1614,7 +1614,12 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     }));
   }
 
-  private feedbackRequiresRetry(feedback: Pick<SimulationFeedback, 'classification' | 'prohibitedConduct'>): boolean {
+  private feedbackRequiresRetry(feedback: Pick<SimulationFeedback, 'classification' | 'prohibitedConduct' | 'retryRequired'>): boolean {
+    // El backend es la autoridad: solo concede reintento en la 1ª respuesta mala
+    // (regla de 2 oportunidades). La 2ª respuesta riesgosa/inadecuada queda
+    // registrada y llega con retryRequired=false (aunque la clasificación sea mala).
+    if (typeof feedback.retryRequired === 'boolean') return feedback.retryRequired;
+    // Fallback para respuestas legacy sin el flag.
     return feedback.prohibitedConduct || feedback.classification === 'INADEQUATE' || feedback.classification === 'RISKY';
   }
 

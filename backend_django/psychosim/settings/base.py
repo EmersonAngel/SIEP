@@ -102,6 +102,20 @@ JWT_SECRET = os.environ.get(
 REFLECTION_ENCRYPTION_KEY = os.environ.get("REFLECTION_ENCRYPTION_KEY", JWT_SECRET)
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 
+ACCESS_REQUEST_NOTIFY_EMAILS = [
+    email.strip()
+    for email in os.environ.get(
+        "ACCESS_REQUEST_NOTIFY_EMAILS",
+        "admin@psychosim.edu.co,secretariapsicologia@cue.edu.co",
+    ).split(",")
+    if email.strip()
+]
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "siep@psychosim.edu.co")
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "PsychoSim / SIEP API",
     "DESCRIPTION": "Backend Django para el simulador SIEP (contrato idéntico a Spring).",

@@ -80,6 +80,44 @@ TIME_JUMP_TEXT = (
     "restablecimiento de derechos."
 )
 
+DEFAULT_RUBRIC = {
+    "name": "Rúbrica formativa — Violencia de género y rutas de protección",
+    "description": (
+        "Evaluación por competencias psicosociales del caso SIM-VBG-001: "
+        "contención, marco normativo, intervención ética y reflexión profesional."
+    ),
+    "criteria": [
+        {
+            "competency": "CONTENCION",
+            "title": "Contención emocional y manejo de crisis",
+            "description": "Identifica necesidades inmediatas y estabiliza a la víctima y su red de apoyo.",
+            "max_score": 5,
+            "display_order": 1,
+        },
+        {
+            "competency": "MARCO_NORMATIVO",
+            "title": "Marco normativo y rutas de atención",
+            "description": "Aplica referentes legales y activa rutas institucionales adecuadas.",
+            "max_score": 5,
+            "display_order": 2,
+        },
+        {
+            "competency": "INTERVENCION_ETICA",
+            "title": "Intervención técnica y ética",
+            "description": "Toma decisiones clínicas que minimizan revictimización y riesgo.",
+            "max_score": 5,
+            "display_order": 3,
+        },
+        {
+            "competency": "REFLEXION",
+            "title": "Reflexión profesional",
+            "description": "Registra aprendizajes y justifica el criterio de intervención.",
+            "max_score": 5,
+            "display_order": 4,
+        },
+    ],
+}
+
 LOCKED_ESCUCHA = (
     "Primero identifica la necesidad de contención: habla con la familia en crisis."
 )
@@ -1213,6 +1251,24 @@ class Command(BaseCommand):
                         display_order=criterion.display_order,
                     )
                 self.stdout.write(f"Rúbrica clonada desde la versión {source_rubric.case_version_id}")
+            else:
+                rubric = Rubric.objects.create(
+                    case_version=version,
+                    name=DEFAULT_RUBRIC["name"],
+                    description=DEFAULT_RUBRIC["description"],
+                    active=True,
+                    created_by=case.created_by,
+                )
+                for criterion in DEFAULT_RUBRIC["criteria"]:
+                    RubricCriterion.objects.create(
+                        rubric=rubric,
+                        competency=criterion["competency"],
+                        title=criterion["title"],
+                        description=criterion["description"],
+                        max_score=criterion["max_score"],
+                        display_order=criterion["display_order"],
+                    )
+                self.stdout.write("Rúbrica canónica creada para la versión publicada.")
 
         # ── Archivar otras versiones publicadas (catálogo = solo esta) ───────
         if not Rubric.objects.filter(case_version_id=version.id, active=True).exists():

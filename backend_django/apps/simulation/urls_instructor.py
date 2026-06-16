@@ -6,12 +6,9 @@ from .views.instructor_views import (
     RubricEvaluationView,
 )
 
-# Mounted at "api/instructor".
+# Montado en "api/instructor/" (con slash final en el include raíz).
 urlpatterns = [
     path("attempts/recent", RecentAttemptsView.as_view()),
-    path("attempts/recent/", RecentAttemptsView.as_view()),
     path("attempts/<uuid:attempt_id>/trace", AttemptTraceView.as_view()),
-    path("attempts/<uuid:attempt_id>/trace/", AttemptTraceView.as_view()),
     path("attempts/<uuid:attempt_id>/rubric-evaluation", RubricEvaluationView.as_view()),
-    path("attempts/<uuid:attempt_id>/rubric-evaluation/", RubricEvaluationView.as_view()),
 ]

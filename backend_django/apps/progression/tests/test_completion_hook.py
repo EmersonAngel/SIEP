@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from rest_framework.test import APIClient
 
-from apps.progression.models import StudentCaseCompletion
 from apps.grupos.models import Grupo
+from apps.progression.models import StudentCaseCompletion
 from apps.simulation.models import CaseVersion
 
 User = get_user_model()
@@ -30,7 +30,7 @@ def _cl(user):
 
 def _assign_case(estudiante, case_version_id, codigo):
     profesor = User.objects.create_user(
-        email=f"prof_{codigo}@x.com", password="x", nombre="Pro", apellido="Prog", role="PROFESOR"
+        email=f"prof_{codigo}@x.com", password="x", nombre="Pro", apellido="Prog", role="PROFESOR",
     )
     grupo = Grupo.objects.create(nombre=f"Grupo {codigo}", codigo=codigo, profesor=profesor)
     with connection.cursor() as cur:

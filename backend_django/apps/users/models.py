@@ -100,3 +100,29 @@ class CustomUser(AbstractBaseUser):
 
     def has_usable_password(self):
         return bool(self.password) and self.password != "!"
+
+
+class AccessRequestStatus(models.TextChoices):
+    PENDING = "PENDING"
+    REVIEWED = "REVIEWED"
+    DISMISSED = "DISMISSED"
+
+
+class AccessRequest(models.Model):
+    nombre = models.CharField(max_length=100)
+    apellido = models.CharField(max_length=100)
+    email = models.EmailField(max_length=255)
+    status = models.CharField(
+        max_length=20,
+        choices=AccessRequestStatus.choices,
+        default=AccessRequestStatus.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "access_requests"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.nombre} {self.apellido} <{self.email}>"

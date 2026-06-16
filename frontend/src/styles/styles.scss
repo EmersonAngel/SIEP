@@ -621,6 +621,17 @@ code, .psy-mono {
 
 /* ─── Fase 7: Accessibility utilities ──────────────────────────────────────── */
 
+/** Bloquea el scroll de la página cuando un modal SIEP está abierto. */
+html.siep-scroll-locked,
+body.siep-scroll-locked {
+  overflow: hidden !important;
+}
+
+body.siep-scroll-locked {
+  position: fixed;
+  width: 100%;
+}
+
 /** Screen-reader-only: visually hidden but announced by assistive tech. */
 .sr-only {
   position: absolute !important;

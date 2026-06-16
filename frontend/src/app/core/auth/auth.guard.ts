@@ -15,12 +15,12 @@ export const authGuard: CanActivateFn = () => {
   }
   if (auth.isTokenMalformed(token)) {
     auth.clearSession();
-    notifications.error('La sesión expiró. Inicia sesión nuevamente.');
+    notifications.error('Tu sesión expiró. Inicia sesión nuevamente.');
     return router.createUrlTree(['/login']);
   }
   if (auth.isTokenExpired(token)) {
     auth.clearSession();
-    notifications.warning('La sesión expiró. Inicia sesión nuevamente.');
+    notifications.warning('Tu sesión expiró. Inicia sesión nuevamente.');
     return router.createUrlTree(['/login']);
   }
 
@@ -35,7 +35,7 @@ export const roleGuard = (...roles: string[]): CanActivateFn => () => {
   const token = auth.getToken();
   if (!token || auth.isTokenMalformed(token) || auth.isTokenExpired(token)) {
     auth.clearSession();
-    notifications.warning('La sesión expiró. Inicia sesión nuevamente.');
+    notifications.warning('Tu sesión expiró. Inicia sesión nuevamente.');
     return router.createUrlTree(['/login']);
   }
 

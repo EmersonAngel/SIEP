@@ -310,22 +310,31 @@ def choose_decision(attempt_id, attempt_token, decision_option_id, actor):
         raise ValidationError("La decisión no pertenece al caso del intento")
 
     effects = decision_effects.resolve(decision)
-    retry_required = decision.prohibited_conduct or decision.classification in {"RISKY", "INADEQUATE"}
-    if retry_required:
-        message = (
-            "La respuesta seleccionada puede ser riesgosa o inadecuada para este momento. "
-            "Puedes volver a responder esta escena."
-        )
-        event_type = (
-            "PROHIBITED_DECISION_RETRY_REQUIRED"
-            if decision.prohibited_conduct
-            else "DECISION_RETRY_REQUIRED"
-        )
-        # El intento queda trazado para revisión/rúbrica docente, pero no cambia
-        # métricas ni avanza el DAG hasta que el estudiante elija una ruta viable.
-        _save_event(attempt, event_type, decision.source_node, decision, 0, 0, message)
-        feedback = dto.feedback_dto(decision, effects, message)
-        return dto.attempt_state(attempt, attempt_token, feedback)
+    is_bad_answer = decision.prohibited_conduct or decision.classification in {"RISKY", "INADEQUATE"}
+    if is_bad_answer:
+        # Regla de 2 oportunidades por escena/cuestionario: la PRIMERA respuesta
+        # riesgosa/inadecuada concede una segunda (y última) oportunidad sin
+        # cambiar métricas ni avanzar el DAG. Si la SEGUNDA también es mala, ya
+        # no se reintenta: queda registrada y avanza (cae al bloque de commit).
+        prior_retries = AttemptEvent.objects.filter(
+            attempt_id=attempt.id,
+            node_id=attempt.current_node_id,
+            event_type__in=["DECISION_RETRY_REQUIRED", "PROHIBITED_DECISION_RETRY_REQUIRED"],
+        ).count()
+        if prior_retries == 0:
+            message = (
+                "La respuesta seleccionada puede ser riesgosa o inadecuada para este momento. "
+                "Tienes una última oportunidad para volver a responder esta escena."
+            )
+            event_type = (
+                "PROHIBITED_DECISION_RETRY_REQUIRED"
+                if decision.prohibited_conduct
+                else "DECISION_RETRY_REQUIRED"
+            )
+            # Trazado para revisión/rúbrica docente; sin cambios de métricas ni avance.
+            _save_event(attempt, event_type, decision.source_node, decision, 0, 0, message)
+            feedback = dto.feedback_dto(decision, effects, message, retry_required=True)
+            return dto.attempt_state(attempt, attempt_token, feedback)
 
     decision_effects.apply(attempt, effects)
     # Efecto mariposa del caso: flags clínicos + métricas acumulativas (se

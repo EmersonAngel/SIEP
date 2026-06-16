@@ -143,6 +143,9 @@ export interface SimulationFeedback {
   revictimizationRisk: boolean;
   message: string;
   prohibitionReason: string | null;
+  /** True solo cuando el backend concede otra oportunidad (1ª respuesta mala).
+   *  En la 2ª respuesta riesgosa/inadecuada queda registrada y llega en false. */
+  retryRequired?: boolean;
 }
 
 export interface SimulationWorldState {
@@ -286,6 +289,8 @@ export interface AttemptTrace {
   inadequateDecisions: number;
   prohibitedDecisions: number;
   safeExitUsed: boolean;
+  timeline: AttemptTimelineEntry[];
+  visitedNodeTitles: string[];
   events: TraceEvent[];
   world: SimulationWorldState;
   reflections: ReflectionTrace[];

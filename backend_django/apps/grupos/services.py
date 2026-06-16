@@ -34,6 +34,7 @@ IMPORT_HEADER_ALIASES = {
     "correo": "email",
     "correo electronico": "email",
     "correo electrónico": "email",
+    "correo institucional": "email",
     "mail": "email",
     "nombre": "nombre",
     "nombres": "nombre",
@@ -44,7 +45,15 @@ IMPORT_HEADER_ALIASES = {
     "password": "password",
     "contraseña": "password",
     "contrasena": "password",
+    "contraseña temporal": "password",
+    "contrasena temporal": "password",
     "clave": "password",
+    "clave temporal": "password",
+    "n": "_skip",
+    "no": "_skip",
+    "numero": "_skip",
+    "número": "_skip",
+    "#": "_skip",
 }
 REQUIRED_IMPORT_FIELDS = {"email", "nombre", "apellido"}
 
@@ -96,8 +105,9 @@ def _student_dto(user):
 
 def _normalize_header(value):
     value = str(value or "").strip().lower()
-    value = re.sub(r"[\s_\-]+", " ", value)
-    return value
+    value = value.replace("°", "").replace("º", "").replace("#", "")
+    value = re.sub(r"[\s_\-]+", " ", value).strip()
+    return IMPORT_HEADER_ALIASES.get(value, value)
 
 
 def _cell_text(cell):
@@ -278,11 +288,17 @@ def _parse_student_import(uploaded_file):
         raise ValidationError("El archivo no tiene estudiantes para importar")
 
     headers = [_normalize_header(cell) for cell in rows[0]]
-    duplicates = sorted({header for header in headers if header and headers.count(header) > 1})
+    duplicates = sorted({
+        header for header in headers
+        if header and header != "_skip" and headers.count(header) > 1
+    })
     if duplicates:
         raise ValidationError(f"Columnas duplicadas: {', '.join(duplicates)}")
 
-    unknown = [header for header in headers if header and header not in STUDENT_IMPORT_COLUMNS]
+    unknown = [
+        header for header in headers
+        if header and header != "_skip" and header not in STUDENT_IMPORT_COLUMNS
+    ]
     if unknown:
         raise ValidationError(f"Columnas no permitidas: {', '.join(unknown)}")
 

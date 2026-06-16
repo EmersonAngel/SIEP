@@ -3,6 +3,7 @@ import { Component, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { APP_BRAND } from '../../core/config/brand.config';
+import { SiepParticleLayerComponent } from '../../shared/ui/siep-particle-layer.component';
 
 interface TrainingCase {
   icon: string;
@@ -37,7 +38,7 @@ interface EthicsItem {
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule],
+  imports: [CommonModule, RouterLink, MatIconModule, SiepParticleLayerComponent],
   templateUrl: './landing.component.html',
   styleUrl: './landing.component.scss'
 })
