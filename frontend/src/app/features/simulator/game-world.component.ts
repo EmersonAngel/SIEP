@@ -124,6 +124,11 @@ class DataDrivenWorldScene extends Phaser.Scene {
   private currentRoomKey = '';
   private authoredRoomActive = false;
   private dbDoorArmed = true;
+  /** Histéresis de puertas BD: dispara al acercarse (≤30) pero solo re-arma al
+   *  alejarse bien (≥72). Evita el rebote cuando el punto de entrada de una sala
+   *  queda cerca de la puerta de regreso (el armado inmediato disparaba de vuelta). */
+  private readonly doorTriggerDist = 30;
+  private readonly doorRearmDist = 72;
   private readonly tiledExits   = new Map<string, { x: number; y: number; w: number; h: number }>();
   private readonly npcMarkers   = new Map<string, Phaser.GameObjects.Container>();
   private readonly markers    = new Map<string, Phaser.GameObjects.Container>();
@@ -339,7 +344,12 @@ class DataDrivenWorldScene extends Phaser.Scene {
     // Cambio de mapa (decisión o puerta): la sala previa ya no aplica. Sin este
     // reset, keepPosition "conserva" la posición del render transicional y se
     // pierde la entrada (entryX/entryY) que enter_room persistió en world.player.
-    if (this.world && this.world.map.key !== world.map.key) this.currentRoomKey = '';
+    if (this.world && this.world.map.key !== world.map.key) {
+      this.currentRoomKey = '';
+      // Recién entrado a una sala: desarmar hasta alejarse de la puerta de regreso
+      // (la histéresis de checkDbDoorTriggers re-arma al superar doorRearmDist).
+      this.dbDoorArmed = false;
+    }
     this.world = world;
     this.nearestKey = null;
     this.callbacks.onProximity(null);
@@ -925,22 +935,30 @@ class DataDrivenWorldScene extends Phaser.Scene {
   private checkDbDoorTriggers() {
     if (!this.player || !this.world || this.scenarioConfig) return;
     const px = this.player.x, py = this.player.y;
-    let onDoor = false;
+    // Resolver la puerta MÁS CERCANA (no la primera del arreglo): si dos puertas
+    // caen en rango, se cruza la que el jugador realmente tiene encima.
+    let nearest: { target: string; entryX: number; entryY: number } | null = null;
+    let nearestDist = Infinity;
     for (const obj of this.world.objects) {
       if ((obj.type || '').toUpperCase() !== 'EXIT') continue;
       const meta = obj.metadata as { targetNodeKey?: string; entryX?: number; entryY?: number } | undefined;
       const target = meta?.targetNodeKey;
       if (!target) continue;
-      if (Phaser.Math.Distance.Between(px, py, obj.x, obj.y) <= 30) {
-        onDoor = true;
-        if (this.dbDoorArmed) {
-          this.dbDoorArmed = false;
-          this.callbacks.onEnterRoom(target, Number(meta?.entryX ?? obj.x), Number(meta?.entryY ?? obj.y));
-        }
-        break;
+      const d = Phaser.Math.Distance.Between(px, py, obj.x, obj.y);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = { target, entryX: Number(meta?.entryX ?? obj.x), entryY: Number(meta?.entryY ?? obj.y) };
       }
     }
-    if (!onDoor) this.dbDoorArmed = true;
+    // Dispara solo si está armado y el jugador está sobre la puerta.
+    if (nearest && this.dbDoorArmed && nearestDist <= this.doorTriggerDist) {
+      this.dbDoorArmed = false;
+      this.callbacks.onEnterRoom(nearest.target, nearest.entryX, nearest.entryY);
+      return;
+    }
+    // Re-arma SOLO cuando se aleja claramente de toda puerta (histéresis): así, al
+    // entrar a una sala junto a la puerta de regreso, no se dispara de inmediato.
+    if (nearestDist >= this.doorRearmDist) this.dbDoorArmed = true;
   }
 
   /** Compone (una vez) textura+anims del preset modular. false → fallback Kenney. */
