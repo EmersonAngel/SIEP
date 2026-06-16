@@ -161,6 +161,16 @@
         }
 
         <button type="submit" class="auth-submit" [disabled]="form.invalid || loading()">Ingresar</button>
+
+        @if (googleEnabled()) {
+          <div class="auth-divider" role="separator"><span>o</span></div>
+          <div class="auth-google">
+            <div #googleBtn class="auth-google__btn" [class.is-loading]="googleLoading()"></div>
+            @if (googleLoading()) {
+              <span class="auth-google__status" role="status">Conectando con Google…</span>
+            }
+          </div>
+        }
       </form>
     </div>
 

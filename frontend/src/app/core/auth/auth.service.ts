@@ -47,6 +47,11 @@ export class AuthService {
     return this.http.post<ApiResponse<{ id: number }>>(`${this.API}/access-request`, payload);
   }
 
+  googleConfig() {
+    return this.http.get<ApiResponse<{ clientId: string; enabled: boolean }>>(`${this.API}/google/config`)
+      .pipe(map(res => res.data));
+  }
+
   saveSession(token: string, user: User): void {
     if (!token || this.isTokenExpired(token)) {
       this.clearSession();

@@ -74,6 +74,20 @@ class LoginView(APIView):
         })
 
 
+class GoogleConfigView(APIView):
+    """GET /api/auth/google/config - expone el client id público de Google.
+
+    El client id de OAuth no es secreto (se usa en el navegador). El frontend lo
+    pide para inicializar Google Identity Services; si está vacío, oculta el botón.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        client_id = getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "") or ""
+        return api_ok({"clientId": client_id, "enabled": bool(client_id)})
+
+
 class GoogleLoginView(APIView):
     """POST /api/auth/google - public Google Identity Services login."""
 

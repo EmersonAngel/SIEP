@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 
 import { HttpErrorResponse } from '@angular/common/http';
 
-import { Component, computed, inject, isDevMode, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, computed, inject, isDevMode, signal, viewChild } from '@angular/core';
 
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
@@ -22,6 +22,9 @@ import { findLoginRole, LOGIN_ROLES, LoginRole } from './login-role.config';
 
 import { SiepParticleLayerComponent } from '../../shared/ui/siep-particle-layer.component';
 
+// Google Identity Services (cargado dinámicamente desde accounts.google.com/gsi/client)
+declare const google: any;
+
 
 
 @Component({
@@ -38,7 +41,7 @@ import { SiepParticleLayerComponent } from '../../shared/ui/siep-particle-layer.
 
 })
 
-export class LoginComponent {
+export class LoginComponent implements AfterViewInit {
 
   readonly brand = APP_BRAND;
 
@@ -71,6 +74,12 @@ export class LoginComponent {
   readonly loading = signal(false);
 
   readonly error = signal('');
+
+  // ── Google Identity Services ──────────────────────────────────────────────
+  readonly googleBtn = viewChild<ElementRef<HTMLDivElement>>('googleBtn');
+  readonly googleEnabled = signal(false);
+  readonly googleLoading = signal(false);
+  private googleInitialized = false;
 
   readonly registerNotice = signal('');
   readonly registerLoading = signal(false);
@@ -177,6 +186,95 @@ export class LoginComponent {
   }
 
 
+
+  ngAfterViewInit(): void {
+    // Pide el client id público; si está configurado, monta el botón de Google.
+    this.auth.googleConfig().subscribe({
+      next: cfg => {
+        if (cfg.enabled && cfg.clientId) {
+          this.setupGoogle(cfg.clientId);
+        }
+      },
+      error: () => { /* Google opcional: si falla, se mantiene oculto */ },
+    });
+  }
+
+  private setupGoogle(clientId: string): void {
+    this.loadGoogleScript()
+      .then(() => {
+        if (typeof google === 'undefined' || !google.accounts?.id) return;
+        if (!this.googleInitialized) {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response: { credential: string }) => this.onGoogleCredential(response),
+          });
+          this.googleInitialized = true;
+        }
+        this.googleEnabled.set(true);
+        const host = this.googleBtn()?.nativeElement;
+        if (host) {
+          host.innerHTML = '';
+          google.accounts.id.renderButton(host, {
+            theme: 'outline',
+            size: 'large',
+            type: 'standard',
+            text: 'continue_with',
+            shape: 'pill',
+            logo_alignment: 'left',
+            width: 320,
+          });
+        }
+      })
+      .catch(() => this.googleEnabled.set(false));
+  }
+
+  private loadGoogleScript(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (typeof google !== 'undefined' && google.accounts?.id) {
+        resolve();
+        return;
+      }
+      const existing = document.getElementById('google-gsi-script') as HTMLScriptElement | null;
+      if (existing) {
+        existing.addEventListener('load', () => resolve());
+        existing.addEventListener('error', () => reject());
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'google-gsi-script';
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject();
+      document.head.appendChild(script);
+    });
+  }
+
+  private onGoogleCredential(response: { credential: string }): void {
+    if (!response?.credential || this.googleLoading()) {
+      return;
+    }
+    this.googleLoading.set(true);
+    this.error.set('');
+    this.auth.loginWithGoogle(response.credential).subscribe({
+      next: () => this.router.navigate(['/portal/dashboard']),
+      error: (error: unknown) => {
+        this.error.set(this.googleErrorMessage(error));
+        this.googleLoading.set(false);
+      },
+    });
+  }
+
+  private googleErrorMessage(error: unknown): string {
+    if (!(error instanceof HttpErrorResponse)) {
+      return 'No fue posible conectar con Google. Intenta nuevamente.';
+    }
+    if (error.status === 401 || error.status === 403) {
+      return 'Esa cuenta de Google no está registrada o está inactiva. Solicita acceso o usa tu correo y contraseña.';
+    }
+    return error.error?.message || 'No fue posible iniciar sesión con Google. Intenta nuevamente.';
+  }
 
   onSubmit(): void {
 
