@@ -35,7 +35,21 @@ def _split_csv(value):
     return [item.strip() for item in (value or "").split(",") if item.strip()]
 
 
-ALLOWED_HOSTS = _split_csv(_require_env("DJANGO_ALLOWED_HOSTS"))
+# Hosts permitidos: lo configurado en DJANGO_ALLOWED_HOSTS MÁS el dominio público
+# que Railway inyecta automáticamente (RAILWAY_PUBLIC_DOMAIN). Así el deploy
+# funciona aunque la variable esté vacía o desactualizada tras generar el dominio.
+_railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+ALLOWED_HOSTS = _split_csv(os.environ.get("DJANGO_ALLOWED_HOSTS"))
+if _railway_domain and _railway_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_domain)
+if not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "Define DJANGO_ALLOWED_HOSTS (o despliega en Railway, que provee "
+        "RAILWAY_PUBLIC_DOMAIN) para psychosim.settings.production"
+    )
+
+# CSRF: confía en el origen https del dominio público (por si algún flujo usa CSRF).
+CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h and h != "*"]
 
 # base.py already read SECRET_KEY from DJANGO_SECRET_KEY; require it explicitly
 # and refuse the insecure development default.
