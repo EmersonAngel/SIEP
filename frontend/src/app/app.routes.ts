@@ -66,7 +66,7 @@ export const routes: Routes = [
       },
       {
         path: 'reportes',
-        canActivate: [roleGuard('PROFESOR', 'ADMIN')],
+        canActivate: [roleGuard('PROFESOR')],
         loadComponent: () => import('./features/reportes/reporte-grupo.component').then(m => m.ReporteGrupoComponent)
       },
       {

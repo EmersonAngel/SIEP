@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import FormParser, MultiPartParser
 
-from shared.permissions import IsProfesor
+from shared.permissions import IsProfesor, IsProfesorOrAdmin
 from shared.response import api_ok
 
 from . import services
@@ -19,9 +19,15 @@ from .serializers import (
 
 
 class GrupoListCreateView(APIView):
-    permission_classes = [IsProfesor]
+    def get_permissions(self):
+        # ADMIN puede LISTAR todos los grupos activos; crear sigue siendo solo PROFESOR.
+        if self.request.method == "GET":
+            return [IsProfesorOrAdmin()]
+        return [IsProfesor()]
 
     def get(self, request):
+        if request.user.role == "ADMIN":
+            return api_ok(services.listar_activos())
         return api_ok(services.listar_de_profesor(request.user.id))
 
     def post(self, request):

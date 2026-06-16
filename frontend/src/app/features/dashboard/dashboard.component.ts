@@ -165,7 +165,6 @@ export class DashboardComponent implements OnInit {
       return [
         { label: 'Gestión de usuarios', route: '/portal/admin/usuarios', icon: 'manage_accounts', accent: true },
         { label: 'Gestión de casos', route: '/portal/casos', icon: 'account_tree' },
-        { label: 'Reportes', route: '/portal/reportes', icon: 'analytics' },
         { label: 'Trazabilidad', route: '/portal/docente/trazabilidad', icon: 'timeline' }
       ];
     }
@@ -214,7 +213,7 @@ export class DashboardComponent implements OnInit {
       ? { label: 'Continuar simulación', route: '/portal/simulador', icon: 'play_arrow', accent: true }
       : this.isProfesor()
         ? { label: 'Revisar trazabilidad', route: '/portal/docente/trazabilidad', icon: 'timeline', accent: true }
-        : { label: 'Ver reportes', route: '/portal/reportes', icon: 'analytics', accent: true };
+        : { label: 'Gestión de usuarios', route: '/portal/admin/usuarios', icon: 'manage_accounts', accent: true };
 
     return {
       title: this.isAdmin()
@@ -266,7 +265,7 @@ export class DashboardComponent implements OnInit {
           value: recentCount > 0 ? String(recentCount) : 'Aún no registrado'
         }
       ],
-      action: { label: 'Ver reportes', route: '/portal/reportes', icon: 'analytics', accent: true }
+      action: { label: 'Gestión de usuarios', route: '/portal/admin/usuarios', icon: 'manage_accounts', accent: true }
     };
   }
 

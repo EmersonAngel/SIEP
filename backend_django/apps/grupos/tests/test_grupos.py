@@ -99,8 +99,15 @@ def test_list_forbidden_for_estudiante(estudiante):
     assert cl(estudiante).get("/api/grupos").status_code == 403
 
 
-def test_list_forbidden_for_admin(admin):
-    assert cl(admin).get("/api/grupos").status_code == 403
+def test_list_all_active_groups_for_admin(admin, profesor, otro_profesor):
+    cl(profesor).post("/api/grupos", {"nombre": "Mio", "codigo": "OWN1"}, format="json")
+    cl(otro_profesor).post("/api/grupos", {"nombre": "Suyo", "codigo": "OTH1"}, format="json")
+
+    resp = cl(admin).get("/api/grupos")
+
+    assert resp.status_code == 200
+    codigos = {g["codigo"] for g in resp.data["data"]}
+    assert {"OWN1", "OTH1"} <= codigos
 
 
 def test_create_forbidden_for_admin(admin):
