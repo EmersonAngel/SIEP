@@ -122,14 +122,11 @@ def test_grupo_report_simulation_block(profesor, estudiante, case_version_id):
         "/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json"
     ).data["data"]
     token, attempt_id = start["attemptToken"], start["attemptId"]
-    option_id = next(
-        option["id"]
-        for option in start["currentNode"]["options"]
-        if option["classification"] == "ADEQUATE"
-    )
+    options = start["currentNode"]["options"]
+    option = next((o for o in options if o["classification"] == "ADEQUATE"), options[0])
     c.post(
         f"/api/simulation/attempts/{attempt_id}/decisions",
-        {"attemptToken": token, "decisionOptionId": option_id},
+        {"attemptToken": token, "decisionOptionId": option["id"]},
         format="json",
     )
     d = cl(profesor).get(

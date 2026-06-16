@@ -21,6 +21,7 @@ from .rubric import (  # noqa: F401
     Rubric,
     RubricCriterion,
     RubricEvaluation,
+    SimulationRubricAssignment,
 )
 from .world import (  # noqa: F401
     ClinicalTool,

@@ -14,6 +14,9 @@ class Rubric(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     active = models.BooleanField(default=True)
+    version = models.CharField(max_length=30, default="1.0")
+    is_default = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, db_column="created_by",
         related_name="rubrics_creadas",
@@ -33,6 +36,8 @@ class RubricCriterion(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     max_score = models.IntegerField(default=0)
+    weight = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    active = models.BooleanField(default=True)
     display_order = models.IntegerField(default=0)
 
     class Meta:
@@ -52,6 +57,10 @@ class RubricEvaluation(models.Model):
     )
     total_score = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     comment = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="PENDING")
+    snapshot_json = models.TextField(default="{}")
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
     evaluated_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -73,6 +82,24 @@ class CriterionScore(models.Model):
 
     class Meta:
         db_table = "criterion_scores"
+        managed = False
+
+
+class SimulationRubricAssignment(models.Model):
+    case_version = models.ForeignKey(
+        CaseVersion, on_delete=models.CASCADE, related_name="rubric_assignments",
+        db_column="case_version_id",
+    )
+    rubric = models.ForeignKey(Rubric, on_delete=models.DO_NOTHING, db_column="rubric_id")
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING, null=True, blank=True,
+        db_column="assigned_by",
+    )
+    active = models.BooleanField(default=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "simulation_rubric_assignments"
         managed = False
 
 

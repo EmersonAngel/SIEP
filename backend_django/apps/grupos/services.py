@@ -7,6 +7,7 @@ import csv
 import io
 import re
 import zipfile
+from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 from django.contrib.auth import get_user_model
@@ -18,6 +19,11 @@ from apps.simulation.models import CaseVersion, SimulationNode
 from apps.simulation.serializers import game_dtos as simulation_dto
 from apps.users.serializers import normalize_email_value, validate_common_email_domain
 
+from .import_contract import (
+    REQUIRED_STUDENT_IMPORT_COLUMNS,
+    STUDENT_IMPORT_COLUMNS,
+    STUDENT_IMPORT_TEMPLATE_FILENAME,
+)
 from .models import Grupo
 
 User = get_user_model()
@@ -50,6 +56,11 @@ IMPORT_HEADER_ALIASES = {
     "#": "_skip",
 }
 REQUIRED_IMPORT_FIELDS = {"email", "nombre", "apellido"}
+
+
+@dataclass
+class ImportValidationError(Exception):
+    result: dict
 
 
 def _total_estudiantes(grupo_id):
@@ -193,15 +204,105 @@ def _parse_xlsx_rows(uploaded_file):
     return rows
 
 
+def _xml_escape(value):
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _column_name(index):
+    index += 1
+    name = ""
+    while index:
+        index, rem = divmod(index - 1, 26)
+        name = chr(65 + rem) + name
+    return name
+
+
+def _worksheet_xml(rows):
+    sheet_rows = []
+    for r_idx, row in enumerate(rows, start=1):
+        cells = []
+        for c_idx, value in enumerate(row):
+            ref = f"{_column_name(c_idx)}{r_idx}"
+            cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{_xml_escape(value)}</t></is></c>')
+        sheet_rows.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
+    cols = '<cols><col min="1" max="4" width="28" customWidth="1"/></cols>'
+    return f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">{cols}<sheetData>{"".join(sheet_rows)}</sheetData></worksheet>'
+
+
+def student_import_template_bytes():
+    data = io.BytesIO()
+    rows = [
+        list(STUDENT_IMPORT_COLUMNS),
+        ["Ana", "Rojas", "ana.rojas@example.edu.co", "Opcional123!"],
+    ]
+    instructions = [
+        ["Campo", "Obligatorio", "Instruccion"],
+        ["nombre", "Si", "Primer nombre o nombres del estudiante."],
+        ["apellido", "Si", "Apellidos del estudiante."],
+        ["email", "Si", "Correo institucional o academico valido. No debe repetirse."],
+        ["password", "No", f"Si se deja vacio se usara {DEFAULT_IMPORTED_STUDENT_PASSWORD}."],
+    ]
+    with zipfile.ZipFile(data, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""")
+        zf.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""")
+        zf.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Estudiantes" sheetId="1" r:id="rId1"/>
+    <sheet name="Instrucciones" sheetId="2" r:id="rId2"/>
+  </sheets>
+</workbook>""")
+        zf.writestr("xl/_rels/workbook.xml.rels", """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+</Relationships>""")
+        zf.writestr("xl/worksheets/sheet1.xml", _worksheet_xml(rows))
+        zf.writestr("xl/worksheets/sheet2.xml", _worksheet_xml(instructions))
+    return data.getvalue()
+
+
 def _parse_student_import(uploaded_file):
     name = (uploaded_file.name or "").lower()
-    rows = _parse_xlsx_rows(uploaded_file) if name.endswith(".xlsx") else _parse_csv_rows(uploaded_file)
+    if not name.endswith(".xlsx"):
+        raise ValidationError("Carga un archivo .xlsx")
+    rows = _parse_xlsx_rows(uploaded_file)
     rows = [row for row in rows if any(_cell_text(cell) for cell in row)]
     if not rows:
         raise ValidationError("El archivo no tiene estudiantes para importar")
 
     headers = [_normalize_header(cell) for cell in rows[0]]
-    missing = sorted(REQUIRED_IMPORT_FIELDS - set(headers))
+    duplicates = sorted({
+        header for header in headers
+        if header and header != "_skip" and headers.count(header) > 1
+    })
+    if duplicates:
+        raise ValidationError(f"Columnas duplicadas: {', '.join(duplicates)}")
+
+    unknown = [
+        header for header in headers
+        if header and header != "_skip" and header not in STUDENT_IMPORT_COLUMNS
+    ]
+    if unknown:
+        raise ValidationError(f"Columnas no permitidas: {', '.join(unknown)}")
+
+    missing = [column for column in REQUIRED_STUDENT_IMPORT_COLUMNS if column not in headers]
     if missing:
         readable = ", ".join(missing)
         raise ValidationError(f"Faltan columnas obligatorias: {readable}")
@@ -210,9 +311,11 @@ def _parse_student_import(uploaded_file):
     for offset, row in enumerate(rows[1:], start=2):
         item = {"row": offset}
         for idx, header in enumerate(headers):
-            if header in {"email", "nombre", "apellido", "password"}:
+            if header in STUDENT_IMPORT_COLUMNS:
                 item[header] = _cell_text(row[idx] if idx < len(row) else "")
         parsed.append(item)
+    if not parsed:
+        raise ValidationError("El archivo no tiene filas de estudiantes")
     return parsed
 
 
@@ -235,73 +338,134 @@ def listar_estudiantes(grupo_id, profesor):
     return [_student_dto(by_id[user_id]) for user_id in ids if user_id in by_id]
 
 
-@transaction.atomic
-def importar_estudiantes(grupo_id, uploaded_file, profesor):
-    grupo = _require_grupo(grupo_id, profesor)
-    rows = _parse_student_import(uploaded_file)
-    created = existing = assigned = duplicated = 0
-    errors = []
-    imported_students = []
-    seen_emails = set()
-
-    for item in rows:
-        row_number = item["row"]
-        try:
-            email = validate_common_email_domain(normalize_email_value(item.get("email", "")))
-            nombre = _cell_text(item.get("nombre"))
-            apellido = _cell_text(item.get("apellido"))
-            password = _cell_text(item.get("password")) or DEFAULT_IMPORTED_STUDENT_PASSWORD
-
-            if not email or not nombre or not apellido:
-                raise ValidationError("Nombre, apellido y email son obligatorios")
-            validate_email(email)
-            if email in seen_emails:
-                duplicated += 1
-                errors.append({"row": row_number, "email": email, "error": "Correo repetido en el archivo"})
-                continue
-            seen_emails.add(email)
-
-            user = User.objects.filter(email=email).first()
-            if user:
-                if user.role != "ESTUDIANTE":
-                    raise ValidationError("El usuario existe, pero no tiene rol ESTUDIANTE")
-                existing += 1
-            else:
-                user = User.objects.create_user(
-                    email=email,
-                    password=password,
-                    nombre=nombre,
-                    apellido=apellido,
-                    role="ESTUDIANTE",
-                    activo=True,
-                )
-                created += 1
-
-            with connection.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) "
-                    "ON CONFLICT DO NOTHING",
-                    [grupo.id, user.id],
-                )
-                if cur.rowcount:
-                    assigned += 1
-            imported_students.append(_student_dto(user))
-        except Exception as exc:
-            detail = exc.detail if isinstance(exc, ValidationError) else str(exc)
-            if isinstance(detail, list):
-                detail = "; ".join(str(x) for x in detail)
-            errors.append({"row": row_number, "email": item.get("email", ""), "error": str(detail)})
-
+def _import_result(grupo, created=0, existing=0, assigned=0, skipped=0, duplicated=0, errors=None, students=None, message=""):
     return {
         "grupo": grupo_dto(grupo),
         "created": created,
         "existing": existing,
         "assigned": assigned,
+        "associated": assigned,
+        "skipped": skipped,
         "duplicated": duplicated,
-        "errors": errors,
-        "students": imported_students,
+        "errors": errors or [],
+        "students": students or [],
         "defaultPassword": DEFAULT_IMPORTED_STUDENT_PASSWORD,
+        "expectedColumns": list(STUDENT_IMPORT_COLUMNS),
+        "message": message,
     }
+
+
+def import_spec():
+    return {
+        "requiredColumns": list(REQUIRED_STUDENT_IMPORT_COLUMNS),
+        "optionalColumns": [column for column in STUDENT_IMPORT_COLUMNS if column not in REQUIRED_STUDENT_IMPORT_COLUMNS],
+        "columns": list(STUDENT_IMPORT_COLUMNS),
+        "templateFilename": STUDENT_IMPORT_TEMPLATE_FILENAME,
+        "acceptedExtensions": [".xlsx"],
+    }
+
+
+def _validate_import_rows(grupo, rows):
+    errors = []
+    normalized_rows = []
+    seen_emails = set()
+    for item in rows:
+        row_number = item["row"]
+        email_raw = _cell_text(item.get("email"))
+        nombre = _cell_text(item.get("nombre"))
+        apellido = _cell_text(item.get("apellido"))
+        password = _cell_text(item.get("password")) or DEFAULT_IMPORTED_STUDENT_PASSWORD
+
+        if not nombre:
+            errors.append({"row": row_number, "field": "nombre", "email": email_raw, "message": "El nombre es obligatorio.", "error": "El nombre es obligatorio."})
+        if not apellido:
+            errors.append({"row": row_number, "field": "apellido", "email": email_raw, "message": "El apellido es obligatorio.", "error": "El apellido es obligatorio."})
+        if not email_raw:
+            errors.append({"row": row_number, "field": "email", "email": "", "message": "El email es obligatorio.", "error": "El email es obligatorio."})
+            continue
+
+        try:
+            email = validate_common_email_domain(normalize_email_value(email_raw))
+            validate_email(email)
+        except Exception as exc:
+            detail = exc.detail if isinstance(exc, ValidationError) else str(exc)
+            if isinstance(detail, list):
+                detail = "; ".join(str(x) for x in detail)
+            errors.append({"row": row_number, "field": "email", "email": email_raw, "message": str(detail), "error": str(detail)})
+            continue
+
+        if email in seen_emails:
+            errors.append({"row": row_number, "field": "email", "email": email, "message": "Correo repetido en el archivo.", "error": "Correo repetido en el archivo."})
+            continue
+        seen_emails.add(email)
+
+        user = User.objects.filter(email=email).first()
+        if user and user.role != "ESTUDIANTE":
+            errors.append({"row": row_number, "field": "email", "email": email, "message": "El usuario existe, pero no tiene rol ESTUDIANTE.", "error": "El usuario existe, pero no tiene rol ESTUDIANTE."})
+            continue
+
+        normalized_rows.append({
+            "row": row_number,
+            "email": email,
+            "nombre": nombre,
+            "apellido": apellido,
+            "password": password,
+            "user": user,
+        })
+
+    if errors:
+        raise ImportValidationError(_import_result(
+            grupo,
+            errors=errors,
+            message="El archivo contiene errores.",
+        ))
+    return normalized_rows
+
+
+@transaction.atomic
+def importar_estudiantes(grupo_id, uploaded_file, profesor):
+    grupo = _require_grupo(grupo_id, profesor)
+    rows = _parse_student_import(uploaded_file)
+    rows = _validate_import_rows(grupo, rows)
+    created = existing = assigned = skipped = 0
+    imported_students = []
+
+    for item in rows:
+        user = item["user"]
+        if user:
+            existing += 1
+        else:
+            user = User.objects.create_user(
+                email=item["email"],
+                password=item["password"],
+                nombre=item["nombre"],
+                apellido=item["apellido"],
+                role="ESTUDIANTE",
+                activo=True,
+            )
+            created += 1
+
+        with connection.cursor() as cur:
+            cur.execute(
+                "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                [grupo.id, user.id],
+            )
+            if cur.rowcount:
+                assigned += 1
+            else:
+                skipped += 1
+        imported_students.append(_student_dto(user))
+
+    return _import_result(
+        grupo,
+        created=created,
+        existing=existing,
+        assigned=assigned,
+        skipped=skipped,
+        students=imported_students,
+        message=f"Se procesaron correctamente {len(rows)} filas.",
+    )
 
 
 def _case_summary(case_version_id):

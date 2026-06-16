@@ -6,7 +6,7 @@ from .views.instructor_views import (
     RubricEvaluationView,
 )
 
-# Mounted at "api/instructor" (no trailing slash) — sub-routes start with "/".
+# Montado en "api/instructor/" (con slash final en el include raíz).
 urlpatterns = [
     path("attempts/recent", RecentAttemptsView.as_view()),
     path("attempts/<uuid:attempt_id>/trace", AttemptTraceView.as_view()),

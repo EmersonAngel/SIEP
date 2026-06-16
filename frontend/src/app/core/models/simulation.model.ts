@@ -349,9 +349,11 @@ export interface StudentAttemptSummary {
 }
 
 export interface RubricEvaluationView {
+  attemptId?: string;
   rubricId: number;
   rubricName: string;
   description: string | null;
+  status?: string;
   criteria: RubricCriterionView[];
   scores: CriterionScoreView[];
   totalScore: number | null;
@@ -363,6 +365,7 @@ export interface RubricCriterionView {
   competency: string;
   title: string;
   description: string | null;
+  weight?: number;
   maxScore: number;
   displayOrder: number;
 }

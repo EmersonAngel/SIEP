@@ -662,6 +662,7 @@ export class ShellComponent implements OnDestroy {
     { label: 'Simulador',  icon: 'play_circle',     route: '/portal/simulador',          caption: 'Simulación formativa', roles: ['ESTUDIANTE', 'PROFESOR', 'ADMIN'] },
     { label: 'Mi personaje', icon: 'face',          route: '/portal/personaje',          caption: 'Editor de avatar', roles: ['ESTUDIANTE', 'ADMIN'] },
     { label: 'Docente',    icon: 'timeline',        route: '/portal/docente/trazabilidad', caption: 'Trazabilidad y rúbricas', roles: ['PROFESOR', 'ADMIN'] },
+    { label: 'Rúbricas',   icon: 'grading',         route: '/portal/rubricas',             caption: 'Criterios y asignaciones', roles: ['PROFESOR', 'ADMIN'] },
     { label: 'Grupos',     icon: 'groups',          route: '/portal/grupos',             caption: 'Cohortes académicas', roles: ['PROFESOR'] },
     { label: 'Reportes',   icon: 'analytics',       route: '/portal/reportes',           caption: 'Evaluación por rúbricas', roles: ['PROFESOR', 'ADMIN'] },
     { label: 'Editar casos', icon: 'edit_square',   route: '/portal/casos',              caption: 'Escenas, NPCs y cuestionarios', roles: ['ADMIN'] },

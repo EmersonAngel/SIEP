@@ -283,6 +283,10 @@ SCHEMA_STATEMENTS = [
         instructor_id BIGINT NOT NULL REFERENCES users(id),
         total_score DECIMAL(10,2) NOT NULL DEFAULT 0,
         comment TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        snapshot_json TEXT NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP NULL,
+        updated_at TIMESTAMP NULL,
         evaluated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     """,
@@ -331,6 +335,42 @@ SCHEMA_STATEMENTS = [
         user_agent TEXT,
         occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         retention_until TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '12 months')
+    );
+    """,
+]
+
+SCHEMA_UPGRADE_STATEMENTS = [
+    """
+    ALTER TABLE rubrics
+        ADD COLUMN IF NOT EXISTS version varchar(30) NOT NULL DEFAULT '1.0',
+        ADD COLUMN IF NOT EXISTS is_default boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS updated_at timestamptz NULL;
+    """,
+    """
+    ALTER TABLE rubric_criteria
+        ADD COLUMN IF NOT EXISTS weight numeric(5,2) NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+    """,
+    """
+    UPDATE rubric_criteria
+    SET weight = max_score
+    WHERE weight = 0 AND max_score > 0;
+    """,
+    """
+    ALTER TABLE rubric_evaluations
+        ADD COLUMN IF NOT EXISTS status varchar(20) NOT NULL DEFAULT 'PENDING',
+        ADD COLUMN IF NOT EXISTS snapshot_json text NOT NULL DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS created_at timestamptz NULL,
+        ADD COLUMN IF NOT EXISTS updated_at timestamptz NULL;
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS simulation_rubric_assignments (
+        id bigserial PRIMARY KEY,
+        case_version_id bigint NOT NULL REFERENCES case_versions(id) ON DELETE CASCADE,
+        rubric_id bigint NOT NULL REFERENCES rubrics(id),
+        assigned_by bigint NULL REFERENCES users(id),
+        active boolean NOT NULL DEFAULT true,
+        assigned_at timestamptz NOT NULL DEFAULT now()
     );
     """,
 ]
@@ -389,6 +429,8 @@ class Command(BaseCommand):
 
         with connection.cursor() as cursor:
             for statement in SCHEMA_STATEMENTS:
+                cursor.execute(statement)
+            for statement in SCHEMA_UPGRADE_STATEMENTS:
                 cursor.execute(statement)
 
         call_command("migrate", verbosity=0)

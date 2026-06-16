@@ -1,3 +1,6 @@
+from django.http import HttpResponse
+from rest_framework import status
+from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import FormParser, MultiPartParser
 
@@ -5,6 +8,7 @@ from shared.permissions import IsProfesor
 from shared.response import api_ok
 
 from . import services
+from .import_contract import STUDENT_IMPORT_TEMPLATE_FILENAME
 from .serializers import (
     AgregarEstudianteSerializer,
     AsignarCasoSerializer,
@@ -46,8 +50,34 @@ class GrupoEstudiantesImportView(APIView):
     def post(self, request, pk):
         ser = ImportarEstudiantesSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        dto = services.importar_estudiantes(pk, ser.validated_data["file"], request.user)
+        try:
+            dto = services.importar_estudiantes(pk, ser.validated_data["file"], request.user)
+        except services.ImportValidationError as exc:
+            return Response(
+                {"success": False, "message": exc.result["message"], "data": exc.result},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return api_ok(dto, message=dto["message"])
         return api_ok(dto, message="Importación de estudiantes procesada")
+
+
+class GrupoEstudiantesImportSpecView(APIView):
+    permission_classes = [IsProfesor]
+
+    def get(self, request):
+        return api_ok(services.import_spec())
+
+
+class GrupoEstudiantesImportTemplateView(APIView):
+    permission_classes = [IsProfesor]
+
+    def get(self, request):
+        response = HttpResponse(
+            services.student_import_template_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{STUDENT_IMPORT_TEMPLATE_FILENAME}"'
+        return response
 
 
 class GrupoCasosView(APIView):

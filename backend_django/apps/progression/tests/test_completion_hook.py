@@ -28,11 +28,11 @@ def _cl(user):
     return c
 
 
-def _assign_case_to_student(estudiante, case_version_id):
+def _assign_case(estudiante, case_version_id, codigo):
     profesor = User.objects.create_user(
-        email="prof_prog@x.com", password="x", nombre="Pro", apellido="Prog", role="PROFESOR"
+        email=f"prof_{codigo}@x.com", password="x", nombre="Pro", apellido="Prog", role="PROFESOR",
     )
-    grupo = Grupo.objects.create(nombre="G-prog", codigo="PROG", profesor=profesor)
+    grupo = Grupo.objects.create(nombre=f"Grupo {codigo}", codigo=codigo, profesor=profesor)
     with connection.cursor() as cur:
         cur.execute(
             "INSERT INTO grupo_estudiante (grupo_id, estudiante_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
@@ -45,7 +45,7 @@ def _assign_case_to_student(estudiante, case_version_id):
 
 
 def test_completing_case_records_completion(estudiante, case_version_id):
-    _assign_case_to_student(estudiante, case_version_id)
+    _assign_case(estudiante, case_version_id, "prog-complete")
     c = _cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json").data["data"]
     token, attempt_id = start["attemptToken"], start["attemptId"]
@@ -55,9 +55,10 @@ def test_completing_case_records_completion(estudiante, case_version_id):
             break
         options = state["currentNode"]["options"]
         assert options
+        option = next((o for o in options if o["classification"] == "ADEQUATE"), options[0])
         state = c.post(
             f"/api/simulation/attempts/{attempt_id}/decisions",
-            {"attemptToken": token, "decisionOptionId": options[0]["id"]},
+            {"attemptToken": token, "decisionOptionId": option["id"]},
             format="json",
         ).data["data"]
     assert state["status"] == "COMPLETED"
@@ -68,7 +69,7 @@ def test_completing_case_records_completion(estudiante, case_version_id):
 
 
 def test_safe_exit_does_not_record_completion(estudiante, case_version_id):
-    _assign_case_to_student(estudiante, case_version_id)
+    _assign_case(estudiante, case_version_id, "prog-safe")
     c = _cl(estudiante)
     start = c.post("/api/simulation/attempts", {"caseVersionId": case_version_id}, format="json").data["data"]
     c.post(

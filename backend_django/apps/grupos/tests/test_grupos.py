@@ -1,3 +1,4 @@
+import uuid
 import pytest
 import zipfile
 from io import BytesIO
@@ -140,11 +141,10 @@ def test_import_students_from_xlsx_creates_and_assigns(profesor, estudiante):
         ["Ana", "Rojas", "ana.rojas@x.com", "Clave1234"],
         ["Luis", "Perez", "luis.perez@x.com", ""],
         [estudiante.nombre, estudiante.apellido, estudiante.email, ""],
-        ["Ana", "Duplicada", "ana.rojas@x.com", ""],
     ])
 
     resp = cl(profesor).post(
-        f"/api/grupos/{grupo['id']}/estudiantes/import",
+        f"/api/grupos/{grupo['id']}/estudiantes/import/",
         {"file": upload},
         format="multipart",
     )
@@ -154,7 +154,9 @@ def test_import_students_from_xlsx_creates_and_assigns(profesor, estudiante):
     assert data["created"] == 2
     assert data["existing"] == 1
     assert data["assigned"] == 3
-    assert data["duplicated"] == 1
+    assert data["associated"] == 3
+    assert data["skipped"] == 0
+    assert data["duplicated"] == 0
     assert data["grupo"]["totalEstudiantes"] == 3
     assert data["defaultPassword"] == "Siep2026!"
     assert User.objects.get(email="ana.rojas@x.com").role == "ESTUDIANTE"
@@ -165,12 +167,36 @@ def test_import_students_from_xlsx_creates_and_assigns(profesor, estudiante):
     assert {"ana.rojas@x.com", "luis.perez@x.com", estudiante.email} <= emails
 
 
+
+
+def test_import_students_rejects_duplicate_email_without_partial_writes(profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "XLS2"}, format="json").data["data"]
+    upload = _xlsx_upload([
+        ["nombre", "apellido", "email", "password"],
+        ["Ana", "Rojas", "ana.rojas@x.com", ""],
+        ["Ana", "Duplicada", "ana.rojas@x.com", ""],
+    ])
+
+    resp = cl(profesor).post(
+        f"/api/grupos/{grupo['id']}/estudiantes/import/",
+        {"file": upload},
+        format="multipart",
+    )
+
+    assert resp.status_code == 400
+    data = resp.data["data"]
+    assert data["created"] == 0
+    assert data["errors"][0]["field"] == "email"
+    assert not User.objects.filter(email="ana.rojas@x.com").exists()
+
+
 def test_import_students_from_institutional_xlsx_template(profesor):
-    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "INST1"}, format="json").data["data"]
+    suffix = uuid.uuid4().hex[:8]
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": f"INST{suffix}"}, format="json").data["data"]
     upload = _xlsx_upload([
         ["N°", "Nombres", "Apellidos", "Correo institucional", "Contraseña temporal"],
-        ["1", "Sofía", "García Pérez", "sofia.garcia01@institucion.edu.co", "DaTe9590!"],
-        ["2", "Mateo", "Martínez Rojas", "mateo.martinez02@institucion.edu.co", "LuTe1346*"],
+        ["1", "Sofía", "García Pérez", f"sofia.garcia.{suffix}@institucion.edu.co", "DaTe9590!"],
+        ["2", "Mateo", "Martínez Rojas", f"mateo.martinez.{suffix}@institucion.edu.co", "LuTe1346*"],
     ])
 
     resp = cl(profesor).post(
@@ -184,8 +210,34 @@ def test_import_students_from_institutional_xlsx_template(profesor):
     assert data["created"] == 2
     assert data["assigned"] == 2
     assert data["grupo"]["totalEstudiantes"] == 2
-    assert User.objects.get(email="sofia.garcia01@institucion.edu.co").nombre == "Sofía"
-    assert User.objects.get(email="mateo.martinez02@institucion.edu.co").check_password("LuTe1346*")
+    assert User.objects.get(email=f"sofia.garcia.{suffix}@institucion.edu.co").nombre == "Sofía"
+    assert User.objects.get(email=f"mateo.martinez.{suffix}@institucion.edu.co").check_password("LuTe1346*")
+
+
+def test_import_template_download_can_be_reuploaded(profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "XLS3"}, format="json").data["data"]
+    template = cl(profesor).get("/api/grupos/estudiantes/import/template/")
+    assert template.status_code == 200
+    upload = SimpleUploadedFile(
+        "plantilla_importacion_estudiantes_siep.xlsx",
+        template.content,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp = cl(profesor).post(
+        f"/api/grupos/{grupo['id']}/estudiantes/import/",
+        {"file": upload},
+        format="multipart",
+    )
+    assert resp.status_code == 200
+    assert resp.data["data"]["created"] == 1
+
+
+def test_import_students_rejects_missing_required_column(profesor):
+    grupo = cl(profesor).post("/api/grupos", {"nombre": "G", "codigo": "XLS4"}, format="json").data["data"]
+    upload = _xlsx_upload([["nombre", "email"], ["Ana", "ana.rojas@x.com"]])
+    resp = cl(profesor).post(f"/api/grupos/{grupo['id']}/estudiantes/import/", {"file": upload}, format="multipart")
+    assert resp.status_code == 400
+    assert "Faltan columnas obligatorias" in resp.data["message"]
 
 
 def test_list_students_in_group(profesor, estudiante):

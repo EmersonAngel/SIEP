@@ -35,3 +35,9 @@ class RubricEvaluationView(APIView):
             instructor_service.save_rubric(attempt_id, request.data, request.user),
             message="Rubrica guardada",
         )
+
+    def put(self, request, attempt_id):
+        return self.post(request, attempt_id)
+
+    def patch(self, request, attempt_id):
+        return self.post(request, attempt_id)
