@@ -18,8 +18,8 @@ interface ChatMessage {
       <section class="assistant-shell" role="dialog" aria-modal="false" aria-labelledby="assistant-title">
         <header class="assistant-head">
           <div>
-            <p>Orientacion</p>
-            <h3 id="assistant-title">Asistente del caso</h3>
+            <p>Chatbot</p>
+            <h3 id="assistant-title">Instructor guia chatbot</h3>
           </div>
           <button type="button" aria-label="Cerrar asistente" (click)="close.emit()">x</button>
         </header>
@@ -60,9 +60,9 @@ interface ChatMessage {
     .assistant-shell {
       position: absolute;
       right: 18px;
-      top: 68px;
+      top: 108px;
       z-index: 170;
-      width: min(360px, calc(100vw - 28px));
+      width: min(380px, calc(100vw - 28px));
       max-height: min(72vh, 620px);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto auto;

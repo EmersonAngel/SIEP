@@ -193,6 +193,12 @@ const CASE_INTRO_PARAGRAPHS = [
             (toggleReduceMotion)="toggleReduceMotion()" />
         </header>
 
+        <button type="button" class="guide-chatbot-button psy-button psy-button--primary" [class.guide-chatbot-button--active]="aiAssistantOpen()"
+          (click)="aiAssistantOpen.set(!aiAssistantOpen())" aria-label="Abrir Instructor guia chatbot">
+          <mat-icon aria-hidden="true">psychology</mat-icon>
+          <span>Instructor guia chatbot</span>
+        </button>
+
         <main class="main-zone">
           <section class="canvas-zone" aria-label="Escena de la simulación">
             @if (sceneObjective(); as objective) {
@@ -443,6 +449,7 @@ const CASE_INTRO_PARAGRAPHS = [
     .vignette--active { opacity: var(--vignette-opacity, 0); }
 
     /* ── Right panel (solo en dialogue-right) ────────────────────────────── */
+    .guide-chatbot-button { position: absolute; top: 60px; right: 16px; z-index: 168; gap: 8px; max-width: min(260px, calc(100vw - 32px)); }
     .right-panel {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);

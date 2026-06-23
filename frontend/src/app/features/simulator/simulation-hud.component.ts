@@ -109,10 +109,11 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
                 aria-label="Abrir bitácora reflexiva (J)" title="Bitácora (J)">
                 <mat-icon aria-hidden="true">menu_book</mat-icon>
               </button>
-              <button type="button" class="hud-action" [class.hud-action--active]="aiAssistantOpen()"
+              <button type="button" class="hud-action hud-action--guide" [class.hud-action--active]="aiAssistantOpen()"
                 (click)="toggleAI.emit()"
-                aria-label="Abrir asistente de orientacion" title="Asistente">
+                aria-label="Abrir Instructor guia chatbot" title="Instructor guia chatbot">
                 <mat-icon aria-hidden="true">psychology</mat-icon>
+                <span>Instructor guia chatbot</span>
               </button>
               <button type="button" class="hud-action" [class.hud-action--active]="settingsOpen()"
                 (click)="settingsOpen.set(!settingsOpen())"
@@ -149,7 +150,7 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
                   </button>
                   <button type="button" role="menuitem" (click)="toggleAI.emit(); settingsOpen.set(false)">
                     <mat-icon aria-hidden="true">psychology</mat-icon>
-                    <span>Asistente</span>
+                    <span>Instructor guia chatbot</span>
                     <strong></strong>
                   </button>
                   <a role="menuitem" routerLink="/portal/simulador">
@@ -295,6 +296,8 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
     .hud-action:active { transform: translateY(1px); }
     .hud-action--active { border-color: rgba(182,156,255,.8); color: #B69CFF; background: rgba(124,77,255,.18); }
     .hud-action mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .hud-action--guide { width: auto; gap: 7px; padding: 0 10px; grid-auto-flow: column; color: #f4f7fb; }
+    .hud-action--guide span { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .68rem; font-weight: 900; }
     .settings-menu {
       position: absolute;
       top: calc(100% + 9px);
