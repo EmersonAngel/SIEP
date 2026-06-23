@@ -109,6 +109,11 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
                 aria-label="Abrir bitácora reflexiva (J)" title="Bitácora (J)">
                 <mat-icon aria-hidden="true">menu_book</mat-icon>
               </button>
+              <button type="button" class="hud-action" [class.hud-action--active]="aiAssistantOpen()"
+                (click)="toggleAI.emit()"
+                aria-label="Abrir asistente de orientacion" title="Asistente">
+                <mat-icon aria-hidden="true">psychology</mat-icon>
+              </button>
               <button type="button" class="hud-action" [class.hud-action--active]="settingsOpen()"
                 (click)="settingsOpen.set(!settingsOpen())"
                 aria-label="Abrir ajustes del juego" title="Ajustes">
@@ -141,6 +146,11 @@ type StressTier = 'calm' | 'moderate' | 'high' | 'critical';
                     <mat-icon aria-hidden="true">menu_book</mat-icon>
                     <span>Bitácora</span>
                     <strong>J</strong>
+                  </button>
+                  <button type="button" role="menuitem" (click)="toggleAI.emit(); settingsOpen.set(false)">
+                    <mat-icon aria-hidden="true">psychology</mat-icon>
+                    <span>Asistente</span>
+                    <strong></strong>
                   </button>
                   <a role="menuitem" routerLink="/portal/simulador">
                     <mat-icon aria-hidden="true">apps</mat-icon>
@@ -398,11 +408,13 @@ export class SimulationHudComponent {
   /** Sala física actual (world.map.title); con puertas puede diferir del nodo DAG. */
   readonly locationLabel = input('');
   readonly journalOpen = input(false);
+  readonly aiAssistantOpen = input(false);
   readonly musicMuted = input(false);
   readonly sfxMuted = input(false);
   readonly reduceMotion = input(false);
   readonly settingsOpen = signal(false);
   readonly toggleJournal = output<void>();
+  readonly toggleAI = output<void>();
   readonly toggleMusic = output<void>();
   readonly toggleSfx = output<void>();
   readonly toggleReduceMotion = output<void>();

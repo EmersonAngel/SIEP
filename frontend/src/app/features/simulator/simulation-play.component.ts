@@ -37,6 +37,7 @@ import { getSceneGuide } from './scene-guide.config';
 import { getSceneObjective } from './scene-objectives.config';
 import { AttemptOutcomeComponent } from './attempt-outcome.component';
 import { resolveViewMode, SimulationViewMode } from './simulation-view-mode.util';
+import { AIAssistantComponent } from './ai-assistant/ai-assistant.component';
 
 const SIMULATOR_INTRO_VIDEO = 'assets/video/fondoHabitacion.mp4';
 const CASE_INTRO_TITLE = 'Contexto inicial del caso';
@@ -56,7 +57,8 @@ const CASE_INTRO_PARAGRAPHS = [
   imports: [
     CommonModule, RouterLink, MatIconModule, MatProgressBarModule,
     SimulationHudComponent, GameWorldComponent, DialoguePanelComponent,
-    ToolInventoryComponent, JournalPanelComponent, AttemptOutcomeComponent
+    ToolInventoryComponent, JournalPanelComponent, AttemptOutcomeComponent,
+    AIAssistantComponent
   ],
   template: `
     <div class="game-container" id="main-content" tabindex="-1" [attr.data-mode]="viewMode()">
@@ -180,10 +182,12 @@ const CASE_INTRO_PARAGRAPHS = [
             [progressLabel]="progressLabel()"
             [locationLabel]="world()?.map?.title ?? ''"
             [journalOpen]="journalOpen()"
+            [aiAssistantOpen]="aiAssistantOpen()"
             [musicMuted]="musicMuted()"
             [sfxMuted]="sfxMuted()"
             [reduceMotion]="reduceMotion()"
             (toggleJournal)="journalOpen.set(!journalOpen())"
+            (toggleAI)="aiAssistantOpen.set(!aiAssistantOpen())"
             (toggleMusic)="toggleMusicMute()"
             (toggleSfx)="toggleSfxMute()"
             (toggleReduceMotion)="toggleReduceMotion()" />
@@ -290,6 +294,13 @@ const CASE_INTRO_PARAGRAPHS = [
           [timeline]="visitedStageLabels()"
           [resources]="supportResources()"
           (save)="saveReflection($event)" (closeSheet)="journalOpen.set(false)" />
+
+        <app-ai-assistant
+          [open]="aiAssistantOpen()"
+          [attemptId]="game.attemptId"
+          [currentNodeId]="game.currentNode.key"
+          [decisionAlreadyTaken]="game.feedback !== null || game.status !== 'IN_PROGRESS'"
+          (close)="aiAssistantOpen.set(false)" />
 
         <!-- Screen-reader narrative route -->
         <section class="sr-narrative-route" aria-label="Ruta narrativa accesible">
@@ -912,6 +923,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
   readonly stressPulse = signal(false);
   readonly a11yAnnouncement = signal('');
   readonly journalOpen  = signal(false);
+  readonly aiAssistantOpen = signal(false);
   readonly fadeActive   = signal(false);
   /** Puerta bloqueada: aviso transitorio propio (NO abre DialoguePanel). */
   readonly doorNotice   = signal('');
@@ -1707,7 +1719,7 @@ export class SimulationPlayComponent implements OnInit, OnDestroy {
     if (attempt.currentNode.key !== 'hospital-urgencias' || world.map.key !== 'hospital-urgencias') return;
     const storageKey = this.caseIntroStorageKey(attempt);
     if (sessionStorage.getItem(storageKey) === 'read') return;
-    if (this.auth.hasRole('ESTUDIANTE') && !this.reduceMotion()) {
+    if (!this.reduceMotion()) {
       this.introVideoEnded.set(false);
       this.showIntroVideo.set(true);
       return;
